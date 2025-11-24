@@ -147,19 +147,21 @@ const Sidebar = ({ isOpen, onClose }) => {
         flex flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-       {/* Logo for Sidebar */}
-<div className="flex-shrink-0 flex items-center justify-center h-20 border-b border-gray-700 px-4">
-  <img 
-    src="/logobk.webp" 
-    alt="BiologyKingdom Logo" 
-    className="w-[125px] h-[75px] object-contain"
-  />
-</div>
-
+        
+        {/* Logo for Sidebar - Desktop Only */}
+        <div className="hidden lg:flex flex-shrink-0 flex items-center justify-center h-20 border-b border-gray-700 px-4">
+          <img 
+            src="/logobk.webp" 
+            alt="BiologyKingdom Logo" 
+            className="w-[125px] h-[75px] object-contain"
+          />
+        </div>
 
         {/* Scrollable Navigation Area */}
         <div className="flex-1 overflow-y-auto">
-          <nav className="mt-8 px-4 pb-4">
+          {/* Mobile: Add margin-top equal to header height (h-16 = 4rem) */}
+          {/* Desktop: Keep original margin (mt-8 = 2rem) */}
+          <nav className="mt-8 lg:mt-8 px-4 pb-4">
             <ul className="space-y-2">
               {menuItems.map((item) => (
                 <li key={item.key}>

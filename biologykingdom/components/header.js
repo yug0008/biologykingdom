@@ -22,13 +22,12 @@ const Header = ({ toggleSidebar, isSidebarOpen }) => {
             {/* Logo - Mobile Only */}
             <div className="flex items-center ml-2 lg:hidden">
               <div className="flex-shrink-0 flex items-center justify-center h-20 border-b border-gray-700 px-4">
-  <img 
-    src="/logobk.webp" 
-    alt="BiologyKingdom Logo" 
-    className="w-[100px] h-[60px] object-contain"
-  />
-</div>
-              
+                <img 
+                  src="/logobk.webp" 
+                  alt="BiologyKingdom Logo" 
+                  className="w-[80px] h-[48px] xs:w-[90px] xs:h-[54px] sm:w-[100px] sm:h-[60px] object-contain"
+                />
+              </div>
             </div>
           </div>
 
@@ -47,11 +46,11 @@ const Header = ({ toggleSidebar, isSidebarOpen }) => {
           </div>
 
           {/* Right Section */}
-          <div className="flex items-center space-x-4">
-            {/* Mobile Search Icon */}
+          <div className="flex items-center space-x-2 xs:space-x-4">
+            {/* Mobile Search Icon - Hidden on smallest screens when logo is visible */}
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="md:hidden p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800"
+              className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 md:hidden"
             >
               <FiSearch size={20} />
             </button>
@@ -73,10 +72,10 @@ const Header = ({ toggleSidebar, isSidebarOpen }) => {
             ) : (
               <button 
                 onClick={() => setIsLoggedIn(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-200"
+                className="flex items-center space-x-2 px-3 xs:px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-200"
               >
                 <FiUser size={16} />
-                <span>Login</span>
+                <span className="hidden xs:inline">Login</span>
               </button>
             )}
           </div>
