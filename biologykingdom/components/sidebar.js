@@ -161,7 +161,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className="flex-1 overflow-y-auto">
           {/* Mobile: Add margin-top equal to header height (h-16 = 4rem) */}
           {/* Desktop: Keep original margin (mt-8 = 2rem) */}
-          <nav className="mt-8 lg:mt-8 px-4 pb-4">
+          <nav className="mt-24 lg:mt-8 sm:mt-7 px-4 pb-4">
             <ul className="space-y-2">
               {menuItems.map((item) => (
                 <li key={item.key}>
