@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
+
+
 :root {
-  --background: #ffffff;
+  --background: #0a0a0a;
   --foreground: #171717;
 }
 
@@ -15,7 +17,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground: #171616;
   }
 }
 
@@ -23,4 +25,203 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+
+
+
+/* Only add new utility classes without resetting existing styles */
+.auth-container {
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-glass {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+}
+
+.auth-btn-primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.auth-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+}
+
+.auth-btn-google {
+  background: white;
+  color: #333;
+  border: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.auth-btn-google:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.auth-input-field {
+  width: 100%;
+  padding: 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.auth-input-field:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Animation classes */
+.auth-fade-in {
+  animation: authFadeIn 0.6s ease-in-out;
+}
+
+.auth-slide-up {
+  animation: authSlideUp 0.6s ease-out;
+}
+
+@keyframes authFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes authSlideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animated background elements */
+.auth-bg-blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: blur(40px);
+  opacity: 0.7;
+  animation: authBlob 7s infinite;
+}
+
+.auth-blob-1 {
+  background: #a78bfa;
+  top: -100px;
+  right: -100px;
+  width: 300px;
+  height: 300px;
+  animation-delay: 0s;
+}
+
+.auth-blob-2 {
+  background: #fbbf24;
+  bottom: -100px;
+  left: -100px;
+  width: 300px;
+  height: 300px;
+  animation-delay: 2s;
+}
+
+.auth-blob-3 {
+  background: #ec4899;
+  top: 150px;
+  left: 150px;
+  width: 300px;
+  height: 300px;
+  animation-delay: 4s;
+}
+
+@keyframes authBlob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(20px, -20px) scale(1.1); }
+  50% { transform: translate(0, 20px) scale(1); }
+  75% { transform: translate(-20px, -20px) scale(0.9); }
+}
+
+/* Profile page specific styles */
+.profile-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+}
+
+.profile-glass {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+}
+
+.profile-bg-blob {
+  position: fixed;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+  filter: blur(60px);
+  opacity: 0.3;
+  animation: profileBlob 10s infinite;
+}
+
+.profile-blob-1 {
+  background: #c4b5fd;
+  top: -200px;
+  right: -200px;
+  width: 500px;
+  height: 500px;
+}
+
+.profile-blob-2 {
+  background: #fde68a;
+  bottom: -200px;
+  left: -200px;
+  width: 500px;
+  height: 500px;
+  animation-delay: 3s;
+}
+
+.profile-blob-3 {
+  background: #fbcfe8;
+  top: 200px;
+  left: 200px;
+  width: 400px;
+  height: 400px;
+  animation-delay: 6s;
+}
+
+@keyframes profileBlob {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(30px, -30px) scale(1.1) rotate(120deg); }
+  66% { transform: translate(-20px, 20px) scale(0.9) rotate(240deg); }
 }
