@@ -1,61 +1,43 @@
-import { useState, useEffect } from 'react'
+// hooks/useAuth.js
+import { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/router'
 
-export const useAuth = () => {
+const AuthContext = createContext({})
+
+export const useAuth = () => useContext(AuthContext)
+
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const getSession = async () => {
+    // Get initial session
+    const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user ?? null)
       setLoading(false)
     }
 
-    getSession()
+    getInitialSession()
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
+        console.log('Auth event:', event)
+        console.log('Session user:', session?.user)
+        
+        setUser(session?.user ?? null)
         setLoading(false)
-        
-        if (event === 'SIGNED_IN' && currentUser) {
-          // Check if user exists in profiles
-          const { data: profile, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', currentUser.id)
-            .single()
 
-          if (error && error.code === 'PGRST116') { // Profile doesn't exist
-            // Create profile for new user using the user_metadata
-            const userMetadata = currentUser.user_metadata
-            
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: currentUser.id,
-                name: userMetadata.full_name || currentUser.email?.split('@')[0] || 'User',
-                email: currentUser.email,
-                phone: userMetadata.phone || null,
-                exams: userMetadata.exams || [],
-                profile_pic_url: userMetadata.avatar_url || '/default-avatar.png',
-                created_at: new Date().toISOString()
-              })
-
-            if (insertError) {
-              console.error('Error creating user profile:', insertError)
-            }
-          }
-          
-          router.push('/profile')
-        }
-        
-        if (event === 'SIGNED_OUT') {
-          router.push('/login')
+        // If user just signed in, redirect to profile
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('User signed in, should redirect to profile')
+          // Use setTimeout to ensure state updates first
+          setTimeout(() => {
+            router.push('/profile')
+          }, 100)
         }
       }
     )
@@ -63,5 +45,9 @@ export const useAuth = () => {
     return () => subscription.unsubscribe()
   }, [router])
 
-  return { user, loading }
+  return (
+    <AuthContext.Provider value={{ user, loading }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }

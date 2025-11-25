@@ -18,15 +18,21 @@ export default function Login() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    if (user) router.push('/profile')
+    console.log('Auth state - User:', user, 'Loading:', authLoading)
+    
+    // If user is authenticated and not loading, redirect to profile
+    if (user && !authLoading) {
+      console.log('User authenticated, redirecting to profile')
+      router.push('/profile')
+    }
     
     if (router.query.registered === 'true') {
       setSuccess('Account created successfully! Please sign in.')
     }
-  }, [user, router])
+  }, [user, authLoading, router])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -35,14 +41,33 @@ export default function Login() {
     setSuccess('')
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('Attempting login with:', email)
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password
       })
       
-      if (error) throw error
+      console.log('Login response:', { data, error })
+      
+      if (error) {
+        console.error('Login error:', error)
+        throw error
+      }
+      
+      if (data.user) {
+        console.log('Login successful, user:', data.user)
+        setSuccess('Login successful! Redirecting...')
+        
+        // Manual redirect as fallback
+        setTimeout(() => {
+          console.log('Manual redirect to profile')
+          router.push('/profile')
+        }, 1500)
+      }
     } catch (error) {
-      setError(error.message)
+      console.error('Login catch error:', error)
+      setError(error.message || 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)
     }
@@ -54,6 +79,9 @@ export default function Login() {
       setError('')
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
       })
       if (error) throw error
     } catch (error) {
@@ -62,7 +90,20 @@ export default function Login() {
     }
   }
 
-  if (user) return null
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-lg">Checking authentication...</div>
+      </div>
+    )
+  }
+
+  // Only return null if user exists and we're not loading
+  if (user && !authLoading) {
+    console.log('User exists, not rendering login page')
+    return null
+  }
 
   return (
     <>

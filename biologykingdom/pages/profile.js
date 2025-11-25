@@ -1,85 +1,87 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import AvatarUploader from '../components/AvatarUploader'
 import Button from '../components/Button'
-import Input from '../components/Input'
+import { FiSettings, FiLogOut, FiUser, FiMail, FiPhone, FiBook, FiCalendar } from 'react-icons/fi'
 
 export default function Profile() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [editMode, setEditMode] = useState(false)
-  const [editName, setEditName] = useState('')
-  const [message, setMessage] = useState('')
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !authLoading) {
       router.push('/login')
       return
     }
-    fetchProfile()
-  }, [user, router])
+    
+    if (user && !authLoading) {
+      fetchProfile()
+    }
+  }, [user, authLoading, router])
 
   const fetchProfile = async () => {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single()
 
-      if (error) throw error
+      if (error || !data) {
+        const newProfile = {
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+          profile_pic_url: user.user_metadata?.avatar_url,
+          phone: user.user_metadata?.phone || '',
+          exams: user.user_metadata?.exams || [],
+          created_at: new Date().toISOString()
+        }
+
+        const { data: insertedData } = await supabase
+          .from('users')
+          .insert([newProfile])
+          .select()
+          .single()
+
+        data = insertedData
+      }
+
       setProfile(data)
-      setEditName(data.name)
     } catch (error) {
       console.error('Error fetching profile:', error)
+      setProfile({
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+        profile_pic_url: user.user_metadata?.avatar_url,
+        phone: user.user_metadata?.phone || '',
+        exams: user.user_metadata?.exams || [],
+        created_at: new Date().toISOString()
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) return
-
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ name: editName.trim() })
-        .eq('id', user.id)
-
-      if (error) throw error
-
-      setProfile(prev => ({ ...prev, name: editName.trim() }))
-      setEditMode(false)
-      setMessage('Profile updated successfully!')
-      setTimeout(() => setMessage(''), 3000)
-    } catch (error) {
-      setMessage('Error updating profile')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleAvatarUpload = async (url) => {
     try {
-      const { error } = await supabase
+      await supabase
         .from('users')
-        .update({ profile_pic_url: url })
+        .update({ 
+          profile_pic_url: url,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', user.id)
 
-      if (error) throw error
-
       setProfile(prev => ({ ...prev, profile_pic_url: url }))
-      setMessage('Profile picture updated!')
-      setTimeout(() => setMessage(''), 3000)
     } catch (error) {
-      setMessage('Error updating profile picture')
+      console.error('Error updating profile picture:', error)
     }
   }
 
@@ -88,224 +90,213 @@ export default function Profile() {
     router.push('/login')
   }
 
+  const goToSettings = () => {
+    router.push('/settings')
+  }
+
+  if (authLoading || (!user && !authLoading)) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-100 dark:from-gray-900 dark:to-purple-900 flex items-center justify-center">
-        <div className="glass p-8">
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-white">Loading your profile...</span>
-          </div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading your profile...</div>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <h2 className="text-xl mb-4">Profile Not Found</h2>
+          <Button onClick={fetchProfile}>
+            Retry Loading Profile
+          </Button>
         </div>
       </div>
     )
   }
 
-  if (!profile) return null
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-100 dark:from-gray-900 dark:to-purple-900">
-      {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-40 left-40 w-80 h-80 bg-pink-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
-      </div>
+    <div className="min-h-screen bg-gray-900">
+      {/* Dark Background with subtle gradient */}
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900"></div>
 
       <div className="relative z-10">
-        {/* Toast Message */}
-        <AnimatePresence>
-          {message && (
-            <motion.div
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -50 }}
-              className="fixed top-4 right-4 glass p-4 rounded-xl shadow-lg"
-            >
-              <div className="flex items-center gap-2 text-white">
-                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                {message}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="container mx-auto p-4 lg:p-8">
+        <div className="container mx-auto px-4 py-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+            className="max-w-4xl mx-auto"
           >
-            {/* Sidebar */}
-            <div className="lg:col-span-1">
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                className="glass p-6 rounded-2xl shadow-xl"
-              >
-                <div className="text-center mb-6">
-                  <AvatarUploader 
-                    url={profile.profile_pic_url} 
-                    onUpload={handleAvatarUpload}
-                    size={120}
-                  />
-                </div>
-                
-                <div className="text-center mb-6">
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    {profile.name}
-                  </h2>
-                  <p className="text-white/70">{profile.email}</p>
-                </div>
+            
 
-                <div className="space-y-4">
-                  <Button variant="outline" onClick={() => setEditMode(true)}>
-                    Edit Profile
-                  </Button>
-                  <Button variant="outline" onClick={handleLogout}>
-                    Sign Out
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Main Content */}
-            <div className="lg:col-span-2">
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="glass p-8 rounded-2xl shadow-xl"
-              >
-                <div className="flex items-center justify-between mb-8">
-                  <h1 className="text-3xl font-bold text-white">Profile Information</h1>
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Name Field */}
-                  <div>
-                    <label className="block text-white/70 text-sm font-medium mb-2">
-                      Full Name
-                    </label>
-                    {editMode ? (
-                      <div className="flex gap-2">
-                        <Input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="flex-1"
-                        />
-                        <Button 
-                          onClick={handleSaveProfile} 
-                          loading={saving}
-                          className="w-auto px-4"
-                        >
-                          Save
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {
-                            setEditMode(false)
-                            setEditName(profile.name)
-                          }}
-                          className="w-auto px-4"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div 
-                        className="p-3 bg-white/10 rounded-xl text-white cursor-pointer hover:bg-white/20 transition-colors"
-                        onClick={() => setEditMode(true)}
-                      >
-                        {profile.name}
-                      </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+              {/* Profile Card */}
+              <div className="lg:col-span-1">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-gray-800/80 backdrop-blur-lg rounded-2xl p-6 border border-gray-700 shadow-xl"
+                >
+                  <div className="text-center mb-6">
+                    <AvatarUploader 
+                      url={profile.profile_pic_url} 
+                      onUpload={handleAvatarUpload}
+                      size={120}
+                    />
+                  </div>
+                  
+                  <div className="text-center mb-6">
+                    <h2 className="text-2xl font-bold text-white mb-2">
+                      {profile.name}
+                    </h2>
+                    <p className="text-gray-300">{profile.email}</p>
+                    {profile.created_at && (
+                      <p className="text-gray-500 text-sm mt-2">
+                        Member since {new Date(profile.created_at).toLocaleDateString()}
+                      </p>
                     )}
                   </div>
 
-                  {/* Email Field */}
-                  <div>
-                    <label className="block text-white/70 text-sm font-medium mb-2">
-                      Email Address
-                    </label>
-                    <div className="p-3 bg-white/10 rounded-xl text-white">
-                      {profile.email}
-                    </div>
-                  </div>
-
-                  {/* Phone Field */}
-                  <div>
-                    <label className="block text-white/70 text-sm font-medium mb-2">
-                      Phone Number
-                    </label>
-                    <div className="p-3 bg-white/10 rounded-xl text-white">
-                      {profile.phone || 'Not provided'}
-                    </div>
-                  </div>
-
-                  {/* Member Since */}
-                  <div>
-                    <label className="block text-white/70 text-sm font-medium mb-2">
-                      Member Since
-                    </label>
-                    <div className="p-3 bg-white/10 rounded-xl text-white">
-                      {new Date(profile.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Exams Section */}
-                <div className="mt-8">
-                  <label className="block text-white/70 text-sm font-medium mb-4">
-                    Preparing For
-                  </label>
-                  <div className="flex flex-wrap gap-3">
-                    {profile.exams && profile.exams.length > 0 ? (
-                      profile.exams.map((exam) => (
-                        <motion.span
-                          key={exam}
-                          whileHover={{ scale: 1.05 }}
-                          className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-medium shadow-lg"
-                        >
-                          {exam.toUpperCase()}
-                        </motion.span>
-                      ))
-                    ) : (
-                      <p className="text-white/60">No exams selected yet</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-white/20">
-                  {[
-                    { label: 'Courses', value: '12' },
-                    { label: 'Hours', value: '156' },
-                    { label: 'Streak', value: '7 days' },
-                    { label: 'Level', value: 'Advanced' }
-                  ].map((stat, index) => (
-                    <motion.div
-                      key={stat.label}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 * index }}
-                      className="text-center p-4 bg-white/5 rounded-xl"
+                  <div className="space-y-3">
+                    <Button 
+                      onClick={goToSettings}
+                      className="w-full flex items-center justify-center gap-2 py-3"
                     >
-                      <div className="text-2xl font-bold text-white mb-1">
-                        {stat.value}
+                      <FiSettings className="w-5 h-5" />
+                      Edit Profile 
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-2 py-3"
+                    >
+                      <FiLogOut className="w-5 h-5" />
+                      Sign Out
+                    </Button>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Info Card */}
+              <div className="lg:col-span-2">
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-gray-800/80 backdrop-blur-lg rounded-2xl p-6 lg:p-8 border border-gray-700 shadow-xl"
+                >
+                  
+                  <div className="space-y-6">
+                    {/* Name */}
+                    <div className="flex items-start gap-4 p-4 bg-gray-700/50 rounded-xl">
+                      <div className="p-2 bg-purple-600 rounded-lg">
+                        <FiUser className="w-5 h-5 text-white" />
                       </div>
-                      <div className="text-white/60 text-sm">
-                        {stat.label}
+                      <div className="flex-1">
+                        <h3 className="text-gray-400 text-sm font-medium mb-1">Full Name</h3>
+                        <p className="text-white text-lg">{profile.name}</p>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
+                    </div>
+
+                    {/* Email */}
+<div className="flex items-start gap-4 p-4 bg-gray-700/50 rounded-xl">
+  <div className="p-2 bg-blue-600 rounded-lg">
+    <FiMail className="w-5 h-5 text-white" />
+  </div>
+  <div className="flex-1 min-w-0"> {/* Add min-w-0 here */}
+    <h3 className="text-gray-400 text-sm font-medium mb-1">Email Address</h3>
+    <p className="text-white text-lg truncate"> {/* Add truncate class */}
+      {profile.email}
+    </p>
+  </div>
+</div>
+
+                    {/* Phone */}
+                    <div className="flex items-start gap-4 p-4 bg-gray-700/50 rounded-xl">
+                      <div className="p-2 bg-green-600 rounded-lg">
+                        <FiPhone className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-gray-400 text-sm font-medium mb-1">Phone Number</h3>
+                        <p className="text-white text-lg">{profile.phone || 'Not provided'}</p>
+                      </div>
+                    </div>
+
+                    {/* Exams */}
+                    <div className="flex items-start gap-4 p-4 bg-gray-700/50 rounded-xl">
+                      <div className="p-2 bg-yellow-600 rounded-lg">
+                        <FiBook className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-gray-400 text-sm font-medium mb-1">Preparing For</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {profile.exams && profile.exams.length > 0 ? (
+                            profile.exams.map((exam) => (
+                              <span
+                                key={exam}
+                                className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full text-sm font-medium"
+                              >
+                                {exam.toUpperCase()}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-gray-400 text-sm">No exams selected</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Member Since */}
+                    <div className="flex items-start gap-4 p-4 bg-gray-700/50 rounded-xl">
+                      <div className="p-2 bg-indigo-600 rounded-lg">
+                        <FiCalendar className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-gray-400 text-sm font-medium mb-1">Member Since</h3>
+                        <p className="text-white text-lg">
+                          {profile.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : 'Recently joined'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-gray-600">
+                    {[
+                      { label: 'Courses', value: '12', color: 'text-blue-400' },
+                      { label: 'Hours', value: '156', color: 'text-green-400' },
+                      { label: 'Streak', value: '7 days', color: 'text-yellow-400' },
+                      { label: 'Level', value: 'Advanced', color: 'text-purple-400' }
+                    ].map((stat, index) => (
+                      <motion.div
+                        key={stat.label}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 * index }}
+                        className="text-center p-4 bg-gray-700/30 rounded-xl"
+                      >
+                        <div className={`text-2xl font-bold ${stat.color} mb-1`}>
+                          {stat.value}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          {stat.label}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
             </div>
           </motion.div>
         </div>

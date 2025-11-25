@@ -36,7 +36,7 @@ const Layout = ({ children }) => {
             
             {/* Main Content Area */}
             <main className="flex-1 overflow-y-auto bg-gray-900">
-              <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="container mx-auto px-1 sm:px-2 lg:px-0 py-0">
                 {children}
               </div>
             </main>

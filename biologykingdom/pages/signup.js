@@ -21,11 +21,11 @@ export default function Signup() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    if (user) router.push('/profile')
-  }, [user, router])
+    if (user && !authLoading) router.push('/profile')
+  }, [user, authLoading, router])
 
   const handleChange = (e) => {
     setFormData(prev => ({
@@ -85,6 +85,9 @@ export default function Signup() {
       setError('')
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/profile`
+        }
       })
       if (error) throw error
     } catch (error) {
@@ -93,7 +96,16 @@ export default function Signup() {
     }
   }
 
-  if (user) return null
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
+      </div>
+    )
+  }
+
+  if (user && !authLoading) return null
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-start p-4 relative overflow-hidden">

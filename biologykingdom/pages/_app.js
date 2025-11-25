@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 import Layout from "@/components/Layout";
+import { AuthProvider } from '../hooks/useAuth'
 
 export default function App({ Component, pageProps, router }) {
   const noLayoutPages = ["/login", "/signup"]; // jinke liye layout nahi chahiye
@@ -12,9 +13,9 @@ export default function App({ Component, pageProps, router }) {
   }
 
   // baaki sab pages layout ke andar
-  return (
+  return (<AuthProvider>
     <Layout>
       <Component {...pageProps} />
-    </Layout>
+    </Layout></AuthProvider>
   );
 }
