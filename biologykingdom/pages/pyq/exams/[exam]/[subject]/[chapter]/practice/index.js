@@ -16,8 +16,7 @@ import {
   FiAlertTriangle,
   FiFlag,
   FiChevronLeft,
-  FiChevronRight,
-  FiPlay
+  FiChevronRight
 } from 'react-icons/fi';
 
 // Format exam date
@@ -42,48 +41,85 @@ const formatTime = (seconds) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Safe JSON parsing function
-const parseJSONB = (content) => {
-  if (!content) return null;
-  
-  try {
-    // If it's already an object/array, return as is
-    if (typeof content === 'object') {
-      return content;
-    }
-    
-    // If it's a string, try to parse it
-    if (typeof content === 'string') {
-      // Check if it looks like JSON (starts with {, [, or valid JSON structure)
-      const trimmed = content.trim();
-      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        return JSON.parse(content);
-      } else {
-        // If it's a simple string, wrap it in a text block
-        return [{ type: 'text', content: content }];
-      }
-    }
-    
+// Ultra-safe JSON parsing function
+const safeParseJSON = (content) => {
+  // If content is null or undefined, return null
+  if (content === null || content === undefined) {
     return null;
-  } catch (error) {
-    console.warn('JSON parsing failed, treating as text:', error);
-    // If parsing fails, treat the content as plain text
+  }
+  
+  // If content is already an object/array, return it directly
+  if (typeof content === 'object' && content !== null) {
+    return content;
+  }
+  
+  // If content is not a string, convert to string and wrap as text
+  if (typeof content !== 'string') {
     return [{ type: 'text', content: String(content) }];
   }
+  
+  // If it's a string, check if it looks like JSON
+  const trimmed = content.trim();
+  
+  // If it starts with { or [, try to parse as JSON
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      console.warn('JSON parsing failed for:', content.substring(0, 50));
+      // If JSON parsing fails, treat as plain text
+      return [{ type: 'text', content: content }];
+    }
+  }
+  
+  // If it's a simple string, wrap it in a text block
+  return [{ type: 'text', content: content }];
+};
+
+// Parse question blocks
+const parseQuestionBlocks = (content) => {
+  const parsed = safeParseJSON(content);
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  return [{ type: 'text', content: 'Question content not available' }];
+};
+
+// Parse options
+const parseOptions = (content) => {
+  const parsed = safeParseJSON(content);
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  
+  // If options is a string but not JSON, create basic options
+  if (typeof content === 'string' && content.trim()) {
+    return [
+      { id: 'A', blocks: [{ type: 'text', content: 'Option A' }] },
+      { id: 'B', blocks: [{ type: 'text', content: 'Option B' }] },
+      { id: 'C', blocks: [{ type: 'text', content: 'Option C' }] },
+      { id: 'D', blocks: [{ type: 'text', content: 'Option D' }] }
+    ];
+  }
+  
+  return [];
+};
+
+// Parse correct answer
+const parseCorrectAnswer = (content) => {
+  const parsed = safeParseJSON(content);
+  if (parsed && typeof parsed === 'object') {
+    return parsed;
+  }
+  
+  // Default fallback
+  return { id: 'A' };
 };
 
 // Render content blocks
 const RenderContent = ({ blocks, className = '' }) => {
-  const parsedBlocks = parseJSONB(blocks);
+  const parsedBlocks = parseQuestionBlocks(blocks);
   
-  if (!parsedBlocks || !Array.isArray(parsedBlocks)) {
-    return (
-      <div className={`text-gray-400 ${className}`}>
-        No content available
-      </div>
-    );
-  }
-
   return (
     <div className={className}>
       {parsedBlocks.map((block, index) => {
@@ -135,9 +171,9 @@ const RenderContent = ({ blocks, className = '' }) => {
 
 // Render options for objective questions
 const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, correctAnswer }) => {
-  const parsedOptions = parseJSONB(options);
+  const parsedOptions = parseOptions(options);
   
-  if (!parsedOptions || !Array.isArray(parsedOptions)) {
+  if (!parsedOptions || parsedOptions.length === 0) {
     return (
       <div className="text-gray-400 text-center py-4">
         No options available
@@ -148,7 +184,8 @@ const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, 
   return (
     <div className="space-y-3">
       {parsedOptions.map((option, index) => {
-        const optionId = option.id || `option-${index}`;
+        const optionId = option.id || `option-${index + 1}`;
+        const optionContent = option.blocks || option.content || `Option ${optionId}`;
         
         return (
           <motion.button
@@ -181,7 +218,7 @@ const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, 
               </div>
               <div className="flex-1 min-w-0">
                 <RenderContent 
-                  blocks={option.blocks || option.content || option} 
+                  blocks={optionContent}
                   className="text-gray-200"
                 />
               </div>
@@ -221,23 +258,7 @@ export default function PracticePage() {
 
   const currentQuestion = questions[currentQuestionIndex];
   const currentAttempt = userAttempts[currentQuestion?.id];
-  const correctAnswer = currentQuestion ? parseJSONB(currentQuestion.correct_answer) : null;
-
-  // Debug current question
-  useEffect(() => {
-    if (currentQuestion) {
-      console.log('=== CURRENT QUESTION DEBUG ===');
-      console.log('Question ID:', currentQuestion.id);
-      console.log('Question Type:', currentQuestion.question_type);
-      console.log('Raw Question Blocks:', currentQuestion.question_blocks);
-      console.log('Parsed Question Blocks:', parseJSONB(currentQuestion.question_blocks));
-      console.log('Raw Options:', currentQuestion.options);
-      console.log('Parsed Options:', parseJSONB(currentQuestion.options));
-      console.log('Raw Correct Answer:', currentQuestion.correct_answer);
-      console.log('Parsed Correct Answer:', correctAnswer);
-      console.log('=============================');
-    }
-  }, [currentQuestion]);
+  const correctAnswer = currentQuestion ? parseCorrectAnswer(currentQuestion.correct_answer) : null;
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -252,7 +273,11 @@ export default function PracticePage() {
       setTimer(prev => prev + 1);
     }, 1000);
 
-    return () => clearInterval(timerRef.current);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, []);
 
   // Fetch all data
@@ -263,8 +288,6 @@ export default function PracticePage() {
       try {
         setLoading(true);
         setError('');
-
-        console.log('Fetching data for:', { exam, subject, chapter, type, topic });
 
         // Fetch exam data
         const { data: examData, error: examError } = await supabase
@@ -307,14 +330,14 @@ export default function PracticePage() {
 
         // Filter by topic if in topic mode
         if (type === 'topic' && topic) {
-          const { data: topicData, error: topicError } = await supabase
+          const { data: topicData } = await supabase
             .from('topics')
             .select('id')
             .eq('slug', topic)
             .eq('chapter_id', chapterData.id)
             .single();
 
-          if (!topicError && topicData) {
+          if (topicData) {
             query = query.eq('topic_id', topicData.id);
           }
         }
@@ -326,7 +349,6 @@ export default function PracticePage() {
 
         if (questionsError) throw questionsError;
         
-        console.log('Questions fetched:', questionsData?.length);
         setQuestions(questionsData || []);
 
         // Fetch user attempts for these questions
@@ -342,7 +364,7 @@ export default function PracticePage() {
 
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load practice data: ' + err.message);
+        setError('Failed to load practice data');
       } finally {
         setLoading(false);
       }
@@ -485,23 +507,15 @@ export default function PracticePage() {
       return;
     }
 
-    console.log('Checking answer:', { 
-      selectedOption, 
-      correctAnswer,
-      questionType: currentQuestion.question_type 
-    });
-
     let isCorrect = false;
     
     if (currentQuestion.question_type === 'objective') {
       isCorrect = selectedOption === correctAnswer?.id;
-      console.log('Objective check result:', isCorrect);
     } else {
       // Numerical question
       const userValue = parseFloat(selectedOption);
       const correctValue = parseFloat(correctAnswer?.value);
       isCorrect = !isNaN(userValue) && !isNaN(correctValue) && userValue === correctValue;
-      console.log('Numerical check result:', isCorrect, { userValue, correctValue });
     }
 
     saveAttempt(isCorrect);
