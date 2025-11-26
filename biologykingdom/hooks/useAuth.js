@@ -13,34 +13,32 @@ export const AuthProvider = ({ children }) => {
   const router = useRouter()
 
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
+    const loadSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user ?? null)
       setLoading(false)
     }
+    loadSession()
 
-    getInitialSession()
-
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event)
-        console.log('Session user:', session?.user)
-        
+      (event, session) => {
         setUser(session?.user ?? null)
         setLoading(false)
 
-        // If user just signed in, redirect to profile
-        if (event === 'SIGNED_IN' && session?.user) {
-          console.log('User signed in, should redirect to profile')
-          // Use setTimeout to ensure state updates first
-          setTimeout(() => {
-            router.push('/profile')
-          }, 100)
+        // redirect sirf login/signup page par allow hoga
+        const authPages = ["/login", "/signup"]
+
+        if (event === "SIGNED_IN" && session?.user) {
+          if (authPages.includes(router.pathname)) {
+            router.replace("/profile")
+          }
+        }
+
+        if (event === "SIGNED_OUT") {
+          router.replace("/login")
         }
       }
-    )
+    );
 
     return () => subscription.unsubscribe()
   }, [router])

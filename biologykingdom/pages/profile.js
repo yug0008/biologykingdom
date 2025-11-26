@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import AvatarUploader from '../components/AvatarUploader'
 import Button from '../components/Button'
-import { FiSettings, FiLogOut, FiUser, FiMail, FiPhone, FiBook, FiCalendar } from 'react-icons/fi'
+import { FiSettings, FiLogOut,FiShoppingBag , FiUser, FiMail, FiPhone, FiBook, FiCalendar } from 'react-icons/fi'
 
 export default function Profile() {
   const [profile, setProfile] = useState(null)
@@ -172,6 +172,14 @@ export default function Profile() {
                       <FiSettings className="w-5 h-5" />
                       Edit Profile 
                     </Button>
+                    <Button 
+  variant="outline" 
+  className="w-full flex items-center justify-center gap-2 py-3"
+>
+  <FiShoppingBag className="w-5 h-5" />
+  Purchases
+</Button>
+
                     <Button 
                       variant="outline" 
                       onClick={handleLogout}

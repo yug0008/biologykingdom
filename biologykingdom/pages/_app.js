@@ -1,21 +1,28 @@
 import "@/styles/globals.css";
 import Layout from "@/components/Layout";
-import { AuthProvider } from '../hooks/useAuth'
+import { AuthProvider } from "../hooks/useAuth";
 
 export default function App({ Component, pageProps, router }) {
-  const noLayoutPages = ["/login", "/signup"]; // jinke liye layout nahi chahiye
+  const noLayoutPages = ["/login", "/signup"];
+  const noLayoutPrefixes = ["/pyq/exams/"];
 
-  const isNoLayoutPage = noLayoutPages.includes(router.pathname);
+  const isNoLayoutPage =
+    noLayoutPages.includes(router.pathname) ||
+    noLayoutPrefixes.some(prefix => router.pathname.startsWith(prefix));
 
-  // Agar no-layout page hai, to direct page return karo
   if (isNoLayoutPage) {
-    return <Component {...pageProps} />;
+    return (
+      <AuthProvider>
+        <Component {...pageProps} />
+      </AuthProvider>
+    );
   }
 
-  // baaki sab pages layout ke andar
-  return (<AuthProvider>
-    <Layout>
-      <Component {...pageProps} />
-    </Layout></AuthProvider>
+  return (
+    <AuthProvider>
+      <Layout>
+        <Component {...pageProps} />
+      </Layout>
+    </AuthProvider>
   );
 }
