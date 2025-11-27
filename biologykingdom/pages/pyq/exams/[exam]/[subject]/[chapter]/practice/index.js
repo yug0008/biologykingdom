@@ -43,83 +43,229 @@ const formatTime = (seconds) => {
 
 // Ultra-safe JSON parsing function
 const safeParseJSON = (content) => {
-  // If content is null or undefined, return null
   if (content === null || content === undefined) {
     return null;
   }
   
-  // If content is already an object/array, return it directly
   if (typeof content === 'object' && content !== null) {
     return content;
   }
   
-  // If content is not a string, convert to string and wrap as text
   if (typeof content !== 'string') {
-    return [{ type: 'text', content: String(content) }];
+    return content;
   }
   
-  // If it's a string, check if it looks like JSON
   const trimmed = content.trim();
   
-  // If it starts with { or [, try to parse as JSON
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       return JSON.parse(content);
     } catch (error) {
-      console.warn('JSON parsing failed for:', content.substring(0, 50));
-      // If JSON parsing fails, treat as plain text
-      return [{ type: 'text', content: content }];
+      console.warn('JSON parsing failed, returning as string:', content.substring(0, 50));
+      return content;
     }
   }
   
-  // If it's a simple string, wrap it in a text block
-  return [{ type: 'text', content: content }];
+  return content;
 };
 
 // Parse question blocks
 const parseQuestionBlocks = (content) => {
   const parsed = safeParseJSON(content);
+  
   if (Array.isArray(parsed)) {
     return parsed;
   }
+  
+  if (typeof parsed === 'string') {
+    return [{ type: 'text', content: parsed }];
+  }
+  
   return [{ type: 'text', content: 'Question content not available' }];
 };
 
 // Parse options
 const parseOptions = (content) => {
   const parsed = safeParseJSON(content);
-  if (Array.isArray(parsed)) {
+  
+  // If it's already an array of objects with the correct structure, return it
+  if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0].id !== undefined) {
     return parsed;
   }
   
-  // If options is a string but not JSON, create basic options
-  if (typeof content === 'string' && content.trim()) {
-    return [
-      { id: 'A', blocks: [{ type: 'text', content: 'Option A' }] },
-      { id: 'B', blocks: [{ type: 'text', content: 'Option B' }] },
-      { id: 'C', blocks: [{ type: 'text', content: 'Option C' }] },
-      { id: 'D', blocks: [{ type: 'text', content: 'Option D' }] }
-    ];
+  // If it's an array of strings, convert to the expected object format
+  if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+    const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+    return parsed.map((option, index) => ({
+      id: optionLetters[index] || `option-${index + 1}`,
+      blocks: [{ type: 'text', content: option }]
+    }));
   }
   
-  return [];
+  // If it's a string, try to parse it as JSON array
+  if (typeof parsed === 'string') {
+    try {
+      const jsonParsed = JSON.parse(parsed);
+      if (Array.isArray(jsonParsed)) {
+        return parseOptions(jsonParsed);
+      }
+    } catch (error) {
+      // If not JSON, treat as single string option
+    }
+  }
+  
+  // Create default options if nothing works
+  const optionLetters = ['A', 'B', 'C', 'D'];
+  return optionLetters.map(letter => ({
+    id: letter,
+    blocks: [{ type: 'text', content: `Option ${letter}` }]
+  }));
 };
 
 // Parse correct answer
 const parseCorrectAnswer = (content) => {
   const parsed = safeParseJSON(content);
-  if (parsed && typeof parsed === 'object') {
+  
+  // If it's already an object with id, return it
+  if (parsed && typeof parsed === 'object' && parsed.id) {
     return parsed;
   }
   
-  // Default fallback
+  // If it's a string, store for matching
+  if (typeof parsed === 'string') {
+    return { content: parsed };
+  }
+  
+  // If it's a string that might be JSON, try to parse it
+  if (typeof parsed === 'string') {
+    try {
+      const jsonParsed = JSON.parse(parsed);
+      if (jsonParsed && typeof jsonParsed === 'object') {
+        return jsonParsed;
+      }
+    } catch (error) {
+      return { content: parsed };
+    }
+  }
+  
   return { id: 'A' };
 };
 
-// Render content blocks
+// Find correct option ID by matching content
+const findCorrectOptionId = (options, correctAnswer) => {
+  if (!correctAnswer) return null;
+  
+  // If correct answer already has an ID, use it
+  if (correctAnswer.id) {
+    return correctAnswer.id;
+  }
+  
+  // If correct answer has content, find the option that matches
+  if (correctAnswer.content) {
+    const parsedOptions = parseOptions(options);
+    const correctOption = parsedOptions.find(option => {
+      const optionContent = option.blocks?.[0]?.content || option.content;
+      return optionContent === correctAnswer.content;
+    });
+    
+    if (correctOption) {
+      return correctOption.id;
+    }
+  }
+  
+  return null;
+};
+
+// CORRECTED: Content renderer that properly handles LaTeX
 const RenderContent = ({ blocks, className = '' }) => {
   const parsedBlocks = parseQuestionBlocks(blocks);
   
+  const renderTextWithLaTeX = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    
+    // Handle ALL possible LaTeX formats in one pass
+    const parts = text.split(/(\\\\(?:\\(?:\(|\))|[^]|\\\(.*?\\\))|\\\(.*?\\\)|\$.*?\$|\$\$.*?\$\$)/g);
+    
+    const result = [];
+    let currentPart = '';
+    let inLaTeX = false;
+    let latexType = '';
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      if (!part) continue;
+      
+      // Check for LaTeX start patterns
+      if (part === '\\(' || part === '\\\\(' || part === '$' || part === '$$') {
+        if (currentPart) {
+          result.push(
+            <span key={result.length} className="text-gray-200">
+              {currentPart}
+            </span>
+          );
+          currentPart = '';
+        }
+        
+        inLaTeX = true;
+        latexType = part;
+        currentPart = part;
+      } 
+      // Check for LaTeX end patterns
+      else if ((part === '\\)' && latexType === '\\(') || 
+               (part === '\\\\)' && latexType === '\\\\(') ||
+               (part === '$' && latexType === '$') ||
+               (part === '$$' && latexType === '$$')) {
+        
+        currentPart += part;
+        
+        // Extract LaTeX content based on the type
+        let latexContent = '';
+        if (latexType === '\\(') {
+          latexContent = currentPart.slice(2, -2); // Remove \( and \)
+        } else if (latexType === '\\\\(') {
+          latexContent = currentPart.slice(3, -3); // Remove \\\( and \\\)
+        } else if (latexType === '$') {
+          latexContent = currentPart.slice(1, -1); // Remove $ and $
+        } else if (latexType === '$$') {
+          latexContent = currentPart.slice(2, -2); // Remove $$ and $$
+        }
+        
+        result.push(
+          <span
+            key={result.length}
+            className="font-mono bg-purple-900/40 px-2 py-1 rounded border border-purple-600 text-purple-200 mx-1"
+          >
+            {latexContent}
+          </span>
+        );
+        
+        currentPart = '';
+        inLaTeX = false;
+        latexType = '';
+      }
+      // If we're inside LaTeX, keep adding to current part
+      else if (inLaTeX) {
+        currentPart += part;
+      }
+      // Regular text
+      else {
+        currentPart += part;
+      }
+    }
+    
+    // Add any remaining text
+    if (currentPart) {
+      result.push(
+        <span key={result.length} className="text-gray-200">
+          {currentPart}
+        </span>
+      );
+    }
+    
+    return result;
+  };
+
   return (
     <div className={className}>
       {parsedBlocks.map((block, index) => {
@@ -133,15 +279,18 @@ const RenderContent = ({ blocks, className = '' }) => {
 
         if (block.type === 'text') {
           return (
-            <span key={index} className="text-gray-200 leading-relaxed">
-              {block.content}
-            </span>
+            <div key={index} className="text-gray-200 leading-relaxed whitespace-pre-wrap">
+              {renderTextWithLaTeX(block.content)}
+            </div>
           );
         } else if (block.type === 'latex') {
           return (
-            <div key={index} className="inline-block bg-gray-700 px-2 py-1 rounded mx-1 my-1">
-              <span className="text-purple-300 text-sm font-mono">[{block.content}]</span>
-            </div>
+            <span
+              key={index}
+              className="font-mono bg-purple-900/40 px-2 py-1 rounded border border-purple-600 text-purple-200 mx-1"
+            >
+              {block.content}
+            </span>
           );
         } else if (block.type === 'image') {
           return (
@@ -157,7 +306,6 @@ const RenderContent = ({ blocks, className = '' }) => {
             </div>
           );
         } else {
-          // Fallback for unknown block types
           return (
             <span key={index} className="text-gray-200 leading-relaxed">
               {block.content || JSON.stringify(block)}
@@ -172,7 +320,7 @@ const RenderContent = ({ blocks, className = '' }) => {
 // Render options for objective questions
 const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, correctAnswer }) => {
   const parsedOptions = parseOptions(options);
-  
+
   if (!parsedOptions || parsedOptions.length === 0) {
     return (
       <div className="text-gray-400 text-center py-4">
@@ -182,7 +330,7 @@ const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, 
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {parsedOptions.map((option, index) => {
         const optionId = option.id || `option-${index + 1}`;
         const optionContent = option.blocks || option.content || `Option ${optionId}`;
@@ -190,40 +338,40 @@ const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, 
         return (
           <motion.button
             key={optionId}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => !showSolution && onOptionSelect(optionId)}
             className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
               selectedOption === optionId
                 ? showSolution
-                  ? optionId === correctAnswer?.id
+                  ? optionId === correctAnswer
                     ? 'border-green-500 bg-green-500/10'
                     : 'border-red-500 bg-red-500/10'
                   : 'border-purple-500 bg-purple-500/10'
-                : 'border-gray-600 bg-gray-700/50 hover:border-gray-500'
+                : 'border-gray-600 bg-gray-800/50 hover:border-gray-500 hover:bg-gray-700/50'
             } ${showSolution ? 'cursor-default' : 'cursor-pointer'}`}
             disabled={showSolution}
           >
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center font-semibold ${
                 selectedOption === optionId
                   ? showSolution
-                    ? optionId === correctAnswer?.id
+                    ? optionId === correctAnswer
                       ? 'border-green-500 text-green-500 bg-green-500/20'
                       : 'border-red-500 text-red-500 bg-red-500/20'
                     : 'border-purple-500 text-purple-500 bg-purple-500/20'
-                  : 'border-gray-500 text-gray-400'
+                  : 'border-gray-500 text-gray-400 bg-gray-700/50'
               }`}>
                 {optionId}
               </div>
               <div className="flex-1 min-w-0">
                 <RenderContent 
                   blocks={optionContent}
-                  className="text-gray-200"
+                  className="text-gray-200 text-sm"
                 />
               </div>
-              {showSolution && optionId === correctAnswer?.id && (
-                <FiCheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+              {showSolution && optionId === correctAnswer && (
+                <FiCheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
               )}
             </div>
           </motion.button>
@@ -258,7 +406,25 @@ export default function PracticePage() {
 
   const currentQuestion = questions[currentQuestionIndex];
   const currentAttempt = userAttempts[currentQuestion?.id];
-  const correctAnswer = currentQuestion ? parseCorrectAnswer(currentQuestion.correct_answer) : null;
+  
+  // Get correct answer and find the correct option ID
+  const rawCorrectAnswer = currentQuestion ? parseCorrectAnswer(currentQuestion.correct_answer) : null;
+  const correctAnswerId = currentQuestion ? findCorrectOptionId(currentQuestion.options, rawCorrectAnswer) : null;
+
+  // Debug current question
+  useEffect(() => {
+    if (currentQuestion) {
+      console.log('=== CURRENT QUESTION DEBUG ===');
+      console.log('Question ID:', currentQuestion.id);
+      console.log('Question Type:', currentQuestion.question_type);
+      console.log('Raw Options:', currentQuestion.options);
+      console.log('Parsed Options:', parseOptions(currentQuestion.options));
+      console.log('Raw Correct Answer:', currentQuestion.correct_answer);
+      console.log('Parsed Correct Answer:', rawCorrectAnswer);
+      console.log('Correct Answer ID:', correctAnswerId);
+      console.log('=============================');
+    }
+  }, [currentQuestion]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -395,49 +561,59 @@ export default function PracticePage() {
     }
   };
 
-  // Check bookmark status when question changes
+  // Check bookmark status and selected option when question changes
   useEffect(() => {
     if (currentQuestion) {
       const attempt = userAttempts[currentQuestion.id];
       setIsBookmarked(attempt?.is_bookmarked || false);
-      setSelectedOption(attempt?.user_answer || null);
-      setShowSolution(false);
+      
+      // Only set selected option from attempt if it exists and we're not in the middle of answering
+      if (attempt?.user_answer && !showSolution) {
+        setSelectedOption(attempt.user_answer);
+      } else if (!attempt && !showSolution) {
+        // Only reset if no attempt exists and we're not showing solution
+        setSelectedOption(null);
+      }
     }
   }, [currentQuestion, userAttempts]);
 
-  // Save user attempt
+  // Save user attempt - UPDATED to always overwrite existing attempts
   const saveAttempt = async (isCorrect, userAnswer = null) => {
     if (!currentQuestion || !user) return;
 
     try {
       setSubmitting(true);
 
+      // Use the provided userAnswer or fall back to selectedOption
+      const finalUserAnswer = userAnswer !== null ? userAnswer : selectedOption;
+
       const attemptData = {
         user_id: user.id,
         question_id: currentQuestion.id,
         chapter_id: currentQuestion.chapter_id,
-        user_answer: userAnswer || selectedOption,
+        user_answer: finalUserAnswer,
         is_correct: isCorrect,
         time_taken: timer,
         question_difficulty: currentQuestion.difficulty_category,
         question_type: currentQuestion.question_type,
         is_bookmarked: isBookmarked,
-        attempted_at: new Date().toISOString()
+        attempted_at: new Date().toISOString(),
+        // Add attempt_count to track multiple attempts
+        attempt_count: (userAttempts[currentQuestion.id]?.attempt_count || 0) + 1
       };
 
-      // Check if attempt already exists
       const existingAttempt = userAttempts[currentQuestion.id];
 
       let error;
       if (existingAttempt) {
-        // Update existing attempt
+        // Always update existing attempt with new data (overwrite)
         const { error: updateError } = await supabase
           .from('user_question_attempts')
           .update(attemptData)
           .eq('id', existingAttempt.id);
         error = updateError;
       } else {
-        // Insert new attempt
+        // Create new attempt
         const { error: insertError } = await supabase
           .from('user_question_attempts')
           .insert([attemptData]);
@@ -446,7 +622,7 @@ export default function PracticePage() {
 
       if (error) throw error;
 
-      // Refresh attempts
+      // Refresh attempts to get the latest data
       await fetchUserAttempts(questions.map(q => q.id));
 
     } catch (err) {
@@ -454,6 +630,52 @@ export default function PracticePage() {
       alert('Error saving your attempt. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Check answer
+  const checkAnswer = () => {
+    if (!currentQuestion || !selectedOption) {
+      alert('Please select an answer first!');
+      return;
+    }
+
+    let isCorrect = false;
+    
+    if (currentQuestion.question_type === 'objective') {
+      isCorrect = selectedOption === correctAnswerId;
+    } else {
+      const userValue = parseFloat(selectedOption);
+      const correctValue = parseFloat(rawCorrectAnswer?.value);
+      isCorrect = !isNaN(userValue) && !isNaN(correctValue) && userValue === correctValue;
+    }
+    
+    // Save attempt and show solution
+    saveAttempt(isCorrect, selectedOption);
+    setShowSolution(true);
+
+    setTimeout(() => {
+      solutionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+  };
+
+  // Navigate to next question
+  const nextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setShowSolution(false);
+      // Reset timer for the new question
+      setTimer(0);
+    }
+  };
+
+  // Navigate to previous question
+  const prevQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+      setShowSolution(false);
+      // Reset timer for the new question
+      setTimer(0);
     }
   };
 
@@ -468,15 +690,16 @@ export default function PracticePage() {
       const existingAttempt = userAttempts[currentQuestion.id];
       
       if (existingAttempt) {
-        // Update existing attempt
         const { error } = await supabase
           .from('user_question_attempts')
-          .update({ is_bookmarked: newBookmarkState })
+          .update({ 
+            is_bookmarked: newBookmarkState,
+            attempted_at: new Date().toISOString()
+          })
           .eq('id', existingAttempt.id);
 
         if (error) throw error;
       } else {
-        // Create new attempt with bookmark only
         const { error } = await supabase
           .from('user_question_attempts')
           .insert([{
@@ -490,58 +713,12 @@ export default function PracticePage() {
         if (error) throw error;
       }
 
-      // Refresh attempts
       await fetchUserAttempts(questions.map(q => q.id));
 
     } catch (err) {
       console.error('Error toggling bookmark:', err);
-      setIsBookmarked(!isBookmarked);
+      setIsBookmarked(!isBookmarkState);
       alert('Error updating bookmark. Please try again.');
-    }
-  };
-
-  // Check answer
-  const checkAnswer = () => {
-    if (!currentQuestion || !selectedOption) {
-      alert('Please select an answer first!');
-      return;
-    }
-
-    let isCorrect = false;
-    
-    if (currentQuestion.question_type === 'objective') {
-      isCorrect = selectedOption === correctAnswer?.id;
-    } else {
-      // Numerical question
-      const userValue = parseFloat(selectedOption);
-      const correctValue = parseFloat(correctAnswer?.value);
-      isCorrect = !isNaN(userValue) && !isNaN(correctValue) && userValue === correctValue;
-    }
-
-    saveAttempt(isCorrect);
-    setShowSolution(true);
-
-    // Scroll to solution after a brief delay
-    setTimeout(() => {
-      solutionRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 300);
-  };
-
-  // Navigate to next question
-  const nextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setSelectedOption(null);
-      setShowSolution(false);
-    }
-  };
-
-  // Navigate to previous question
-  const prevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-      setSelectedOption(null);
-      setShowSolution(false);
     }
   };
 
@@ -628,7 +805,6 @@ export default function PracticePage() {
         <div className="bg-gray-800/80 backdrop-blur-lg border-b border-gray-700 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 py-2">
             <div className="flex items-center justify-between">
-              {/* Breadcrumb and Back */}
               <div className="flex items-center space-x-3 min-w-0 flex-1">
                 <button
                   onClick={() => router.back()}
@@ -648,7 +824,6 @@ export default function PracticePage() {
                 </div>
               </div>
 
-              {/* Timer and Question Info */}
               <div className="flex items-center space-x-4 flex-shrink-0">
                 <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1.5 rounded-lg">
                   <FiClock className="w-3 h-3 text-purple-400" />
@@ -664,21 +839,21 @@ export default function PracticePage() {
         </div>
 
         {/* Main Content */}
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="bg-gray-800/50 backdrop-blur-lg border border-gray-700 rounded-2xl overflow-hidden">
             {/* Question Header */}
-            <div className="border-b border-gray-700 p-4">
+            <div className="border-b border-gray-700 p-4 bg-gray-800/30">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2 bg-blue-600/20 px-3 py-1 rounded-full">
                     <FiCalendar className="w-3 h-3 text-blue-400" />
-                    <span className="text-blue-300 text-sm font-medium">
+                    <span className="text-blue-300 text-xs md:text-sm font-medium">
                       {formatExamDate(currentQuestion.year, currentQuestion.month, currentQuestion.shift)}
                     </span>
                   </div>
                   
                   <div className="flex items-center space-x-2 bg-green-600/20 px-3 py-1 rounded-full">
-                    <span className="text-green-300 text-sm font-medium capitalize">
+                    <span className="text-green-300 text-xs md:text-sm font-medium capitalize">
                       {currentQuestion.difficulty_category}
                     </span>
                   </div>
@@ -698,7 +873,7 @@ export default function PracticePage() {
             </div>
 
             {/* Question Content */}
-            <div className="p-6">
+            <div className="p-6 bg-gray-800/30">
               {/* Question */}
               <div className="mb-8">
                 <div className="flex items-start space-x-3 mb-4">
@@ -723,7 +898,7 @@ export default function PracticePage() {
                     selectedOption={selectedOption}
                     onOptionSelect={setSelectedOption}
                     showSolution={showSolution}
-                    correctAnswer={correctAnswer}
+                    correctAnswer={correctAnswerId}
                   />
                 </div>
               )}
@@ -787,7 +962,7 @@ export default function PracticePage() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="border-t border-gray-700"
+                  className="border-t border-gray-700 bg-gray-800/30"
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-6">
@@ -830,6 +1005,11 @@ export default function PracticePage() {
                                 : 'Better luck next time. Review the solution below.'
                               }
                             </p>
+                            {currentAttempt.attempt_count > 1 && (
+                              <p className="text-gray-400 text-xs mt-1">
+                                Attempt #{currentAttempt.attempt_count}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
