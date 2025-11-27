@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, ArrowRight, Star, Users, CheckCircle, Quote, Video, BookOpen, Calendar, ShieldQuestion, PenTool, Layout, Target, TrendingUp, Award, Zap, X, BarChart2, PieChart, Download, Share, Settings } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-
+import { FiBook, FiBarChart2, FiFileText, FiUsers, FiArrowRight } from "react-icons/fi";
 // Recharts components for analytics
 import {
   LineChart,
@@ -197,7 +197,7 @@ const DailyGoalCard = () => {
 
   if (loading) {
     return (
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-4 animate-pulse w-full max-w-4xl mx-auto">
+      <div className="bg-gradient-to-b from-slate-900 to-slate-900 backdrop-blur-sm border border-slate-700 rounded-2xl p-4 animate-pulse w-full max-w-4xl mx-auto">
         <div className="h-4 bg-slate-700 rounded w-3/4 mb-2"></div>
         <div className="h-3 bg-slate-700 rounded w-1/2 mb-3"></div>
         <div className="flex space-x-1">
@@ -214,7 +214,7 @@ const DailyGoalCard = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-4 cursor-pointer hover:border-blue-500/50 transition-all duration-300 group relative overflow-hidden w-full max-w-4xl mx-auto"
+        className="bg-gradient-to-b from-slate-900 to-slate-900 backdrop-blur-sm border border-slate-700 rounded-2xl p-4 cursor-pointer hover:border-blue-500/50 transition-all duration-300 group relative overflow-hidden w-full max-w-4xl mx-auto"
         onClick={() => setShowAnalytics(true)}
       >
         {/* Header */}
@@ -490,6 +490,7 @@ const AnalyticsOverlay = ({ onClose, progressData, onTargetChange }) => {
     };
   };
 
+  
   const fetchDailyProgress = async () => {
     if (!user) return getDemoAnalyticsData().daily;
 
@@ -1200,7 +1201,7 @@ const Button = ({ children, variant = 'primary', className = '', icon, onClick, 
 // Subheader Component (Improved Mobile UI)
 const Subheader = () => {
   return (
-    <section className="bg-slate-900 border-b border-slate-700 shadow-lg">
+    <section className="bg-slate-900 border-slate-700 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 gap-3">
@@ -1251,11 +1252,40 @@ const Subheader = () => {
     </section>
   );
 };
-
+const features = [
+  {
+    icon: FiBook,
+    title: 'Practice PYQs',
+    description: 'Access previous year questions from NEET, AIIMS, JIPMER and more',
+    color: 'from-purple-500 to-pink-500',
+    path: '/pyq'
+  },
+  {
+    icon: FiBarChart2,
+    title: 'Smart Tests',
+    description: 'AI-powered tests that adapt to your learning level',
+    color: 'from-blue-500 to-cyan-500',
+    path: '/tests'
+  },
+  {
+    icon: FiFileText,
+    title: 'Daily Practice',
+    description: 'Curated DPPs for consistent practice and improvement',
+    color: 'from-green-500 to-emerald-500',
+    path: '/dpp'
+  },
+  {
+    icon: FiUsers,
+    title: 'Mentorship',
+    description: 'Get guidance from top performers and subject experts',
+    color: 'from-orange-500 to-red-500',
+    path: '/mentorship'
+  }
+];
 // Daily Goal Section Component
 const DailyGoalSection = () => {
   return (
-    <section className="py-2 bg-gradient-to-b from-slate-900 to-slate-800">
+    <section className="py-2 bg-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <DailyGoalCard />
       </div>
@@ -1552,6 +1582,8 @@ const Testimonials = () => {
 ];
 
 
+
+
   return (
     <section className="py-20 bg-gradient-to-b from-slate-900 to-slate-800 relative overflow-hidden">
       {/* Background Pattern */}
@@ -1623,10 +1655,43 @@ export default function Home() {
     <div className="min-h-screen bg-white">
       <Subheader />
       <DailyGoalSection />
-      <Banner />
+<section className="w-full  bg-gradient-to-b from-slate-900 to-slate-800 relative text-gray-200 py-10 px-4 sm:px-8">
+  
+
+
+  {/* FEATURES SECTION - SAME SECTION */}
+  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+    {features.map((item, index) => (
+      <div
+        key={index}
+        className=" bg-gradient-to-b from-slate-900 to-slate-800 relative border border-gray-800 p-4 rounded-xl shadow hover:scale-105 transition cursor-pointer"
+      >
+        {/* Icon Box */}
+        <div className={`p-3 bg-gradient-to-br ${item.color} rounded-lg w-fit mb-3`}>
+          <item.icon className="text-white text-2xl" />
+        </div>
+
+        {/* Title */}
+        <h2 className="text-white font-semibold text-sm sm:text-base">
+          {item.title}
+        </h2>
+
+        {/* Description */}
+        <p className="text-gray-400 text-xs mt-1 leading-tight">
+          {item.description}
+        </p>
+      </div>
+    ))}
+  </div>
+</section>
+
       <Features />
+      <Banner />
+      
       <Educators />
       <Testimonials />
+     
+
     </div>
   );
 }
