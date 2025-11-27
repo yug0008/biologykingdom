@@ -1197,57 +1197,58 @@ const Button = ({ children, variant = 'primary', className = '', icon, onClick, 
     </button>
   );
 };
-
-// Subheader Component
+// Subheader Component (Improved Mobile UI)
 const Subheader = () => {
   return (
-    <header className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50 shadow-lg">
+    <section className="bg-slate-900 border-b border-slate-700 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between py-3">
-          {/* Left Section */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            <div className="flex items-center gap-3">
-              {/* NEET Logo */}
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg overflow-hidden flex items-center justify-center">
-                <img 
-                  src="https://pbs.twimg.com/profile_images/1689922352421998592/da1QWRF1_400x400.jpg" 
-                  alt="NEET Logo"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="font-bold text-white text-lg">NEET UG PYQ</h1>
-                <p className="text-xs text-gray-300">Previous Year Questions</p>
-              </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 gap-3">
+
+          {/* LEFT SECTION */}
+          <div className="flex items-center gap-3">
+            {/* Logo */}
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg overflow-hidden flex items-center justify-center">
+              <img
+                src="https://pbs.twimg.com/profile_images/1689922352421998592/da1QWRF1_400x400.jpg"
+                alt="NEET Logo"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Title — visible on both mobile + desktop */}
+            <div>
+              <h1 className="font-bold text-white text-base sm:text-lg">
+                NEET UG PYQ
+              </h1>
+              <p className="text-xs text-gray-300">Previous Year Questions</p>
             </div>
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            {/* Total Questions */}
-            <div className="text-right hidden sm:block">
-              <div className="text-2xl font-bold text-blue-400">24,874</div>
+          {/* RIGHT SECTION */}
+          <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+
+            {/* Total Questions — mobile smaller */}
+            <div className="text-right">
+              <div className="text-lg sm:text-2xl font-bold text-blue-400">
+                24,874
+              </div>
               <div className="text-xs text-gray-400">Total Questions</div>
             </div>
 
-            {/* Start Practicing Button */}
-            <Button 
-              variant="primary" 
-              icon={<ArrowRight size={16} />}
+            {/* Start Practicing Button — mobile smaller + full width */}
+            <Button
+              variant="primary"
+              icon={<ArrowRight size={14} />}
               href="/pyq/exams/neet"
-              className="text-xs sm:text-sm"
+              className="text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-3"
             >
-              Start Practicing
+              Start
             </Button>
           </div>
         </div>
-
-        {/* Mobile Total Questions */}
-        <div className="sm:hidden text-center py-2 border-t border-slate-700">
-          <div className="text-lg font-bold text-blue-400">24,874 Questions</div>
-        </div>
       </div>
-    </header>
+    </section>
   );
 };
 
