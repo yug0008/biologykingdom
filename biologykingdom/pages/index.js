@@ -1255,75 +1255,9 @@ const Subheader = () => {
 // Daily Goal Section Component
 const DailyGoalSection = () => {
   return (
-    <section className="py-8 bg-gradient-to-b from-slate-900 to-slate-800">
+    <section className="py-2 bg-gradient-to-b from-slate-900 to-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <DailyGoalCard />
-      </div>
-    </section>
-  );
-};
-
-// Banner Section
-const Banner = () => {
-  return (
-    <section className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
-      <div className="aspect-[3/1] w-full relative">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,_#ffffff_1px,_transparent_0)] bg-[length:40px_40px]" />
-        </div>
-        
-        {/* Content */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-white px-4 max-w-4xl mx-auto">
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6"
-            >
-              Master <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">NEET UG</span> Preparation
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-sm sm:text-lg md:text-xl text-gray-300 mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed"
-            >
-              Access 24,874+ previous year questions, detailed solutions, and AI-powered analytics to boost your NEET score.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="flex flex-col sm:flex-row gap-3 justify-center items-center"
-            >
-              <Button variant="primary" icon={<Play size={18} />} className="text-sm sm:text-base">
-                Watch Demo
-              </Button>
-              <Button variant="glass" icon={<ArrowRight size={18} />} className="text-sm sm:text-base">
-                Explore Features
-              </Button>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Floating Elements */}
-        <motion.div 
-          animate={{ y: [0, -20, 0] }}
-          transition={{ repeat: Infinity, duration: 6 }}
-          className="absolute top-1/4 left-1/4 w-4 h-4 bg-blue-400 rounded-full opacity-60"
-        />
-        <motion.div 
-          animate={{ y: [0, 20, 0] }}
-          transition={{ repeat: Infinity, duration: 5, delay: 1 }}
-          className="absolute top-3/4 right-1/3 w-3 h-3 bg-purple-400 rounded-full opacity-60"
-        />
-        <motion.div 
-          animate={{ y: [0, -15, 0] }}
-          transition={{ repeat: Infinity, duration: 7, delay: 2 }}
-          className="absolute bottom-1/4 right-1/4 w-5 h-5 bg-blue-300 rounded-full opacity-40"
-        />
       </div>
     </section>
   );
@@ -1410,6 +1344,73 @@ const Features = () => {
             </motion.div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+};
+
+// Banner Section
+const Banner = () => {
+  return (
+    <section className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+  <div className="relative w-full min-h-[260px] sm:min-h-[380px] md:min-h-[480px] lg:min-h-[550px]">
+
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,_#ffffff_1px,_transparent_0)] bg-[length:40px_40px]" />
+        </div>
+        
+        {/* Content */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center text-white px-4 max-w-4xl mx-auto">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6"
+            >
+              Master <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">NEET UG</span> Preparation
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="text-sm sm:text-lg md:text-xl text-gray-300 mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed"
+            >
+              Access 24,874+ previous year questions, detailed solutions, and AI-powered analytics to boost your NEET score.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="flex flex-col sm:flex-row gap-3 justify-center items-center"
+            >
+              <Button variant="primary" icon={<Play size={18} />} className="text-sm sm:text-base">
+                Watch Demo
+              </Button>
+              <Button variant="glass" icon={<ArrowRight size={18} />} className="text-sm sm:text-base">
+                Explore Features
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Floating Elements */}
+        <motion.div 
+          animate={{ y: [0, -20, 0] }}
+          transition={{ repeat: Infinity, duration: 6 }}
+          className="absolute top-1/4 left-1/4 w-4 h-4 bg-blue-400 rounded-full opacity-60"
+        />
+        <motion.div 
+          animate={{ y: [0, 20, 0] }}
+          transition={{ repeat: Infinity, duration: 5, delay: 1 }}
+          className="absolute top-3/4 right-1/3 w-3 h-3 bg-purple-400 rounded-full opacity-60"
+        />
+        <motion.div 
+          animate={{ y: [0, -15, 0] }}
+          transition={{ repeat: Infinity, duration: 7, delay: 2 }}
+          className="absolute bottom-1/4 right-1/4 w-5 h-5 bg-blue-300 rounded-full opacity-40"
+        />
       </div>
     </section>
   );
