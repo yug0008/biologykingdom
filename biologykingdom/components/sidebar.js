@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   FiHome, 
   FiBook, 
@@ -10,11 +10,21 @@ import {
   FiChevronRight
 } from 'react-icons/fi';
 import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const [activeItem, setActiveItem] = useState('home');
   const [openSubmenu, setOpenSubmenu] = useState(null);
+  const [progressData, setProgressData] = useState({
+    attempted: 0,
+    correct: 0,
+    target: 10,
+    percentage: 0
+  });
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { user } = useAuth();
 
   const menuItems = [
     {
@@ -112,6 +122,60 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   ];
 
+  useEffect(() => {
+    if (user) {
+      fetchTodayProgress();
+    }
+  }, [user]);
+
+  const fetchTodayProgress = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get today's attempts
+      const { data: todayAttempts, error } = await supabase
+        .from('user_question_attempts')
+        .select('is_correct')
+        .eq('user_id', user.id)
+        .gte('attempted_at', `${today}T00:00:00`)
+        .lt('attempted_at', `${today}T23:59:59`);
+
+      if (error) throw error;
+
+      const attempted = todayAttempts?.length || 0;
+      const correct = todayAttempts?.filter(attempt => attempt.is_correct === true).length || 0;
+      
+      // Get user's daily target from localStorage or default to 10
+      const savedTarget = localStorage.getItem(`daily_target_${user.id}`);
+      const target = savedTarget ? parseInt(savedTarget) : 10;
+      
+      const percentage = Math.min((attempted / target) * 100, 100);
+
+      setProgressData({
+        attempted,
+        correct,
+        target,
+        percentage
+      });
+    } catch (error) {
+      console.error('Error fetching progress data:', error);
+      // Fallback to default values
+      setProgressData({
+        attempted: 0,
+        correct: 0,
+        target: 10,
+        percentage: 0
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleItemClick = (item) => {
     setActiveItem(item.key);
     if (item.path) {
@@ -126,6 +190,31 @@ const Sidebar = ({ isOpen, onClose }) => {
   const handleSubItemClick = (path) => {
     router.push(path);
     onClose();
+  };
+
+  const getProgressColor = (percentage) => {
+    if (percentage >= 100) return 'from-green-400 to-emerald-400';
+    if (percentage >= 75) return 'from-green-400 to-teal-400';
+    if (percentage >= 50) return 'from-yellow-400 to-orange-400';
+    if (percentage >= 25) return 'from-orange-400 to-red-400';
+    return 'from-gray-400 to-gray-500';
+  };
+
+  const getProgressText = (percentage) => {
+    if (percentage >= 100) return 'text-green-400';
+    if (percentage >= 75) return 'text-green-400';
+    if (percentage >= 50) return 'text-yellow-400';
+    if (percentage >= 25) return 'text-orange-400';
+    return 'text-gray-400';
+  };
+
+  const getMotivationalMessage = (percentage, attempted, target) => {
+    if (percentage >= 100) return 'Daily target achieved! 🎉';
+    if (attempted === 0) return 'Start your learning journey! 🚀';
+    if (percentage >= 75) return 'Almost there! Keep going! 💪';
+    if (percentage >= 50) return 'Great progress! Halfway there! 👍';
+    if (percentage >= 25) return 'Good start! Keep it up! 🔥';
+    return 'Complete your daily goals';
   };
 
   return (
@@ -217,15 +306,46 @@ const Sidebar = ({ isOpen, onClose }) => {
           <div className="p-4 bg-gray-800 rounded-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-300">Today's Progress</span>
-              <span className="text-sm text-green-400">60%</span>
+              {loading ? (
+                <div className="animate-pulse bg-gray-600 h-4 w-12 rounded"></div>
+              ) : (
+                <span className={`text-sm font-medium ${getProgressText(progressData.percentage)}`}>
+                  {Math.round(progressData.percentage)}%
+                </span>
+              )}
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-green-400 to-teal-400 h-2 rounded-full transition-all duration-500"
-                style={{ width: '60%' }}
-              ></div>
+            
+            <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+              {loading ? (
+                <div className="animate-pulse bg-gray-600 h-2 rounded-full"></div>
+              ) : (
+                <div 
+                  className={`h-2 rounded-full bg-gradient-to-r transition-all duration-500 ease-out ${getProgressColor(progressData.percentage)}`}
+                  style={{ width: `${progressData.percentage}%` }}
+                ></div>
+              )}
             </div>
-            <p className="text-xs text-gray-400 mt-2">Complete your daily goals</p>
+
+            {loading ? (
+              <div className="space-y-1">
+                <div className="animate-pulse bg-gray-600 h-3 w-24 rounded"></div>
+                <div className="animate-pulse bg-gray-600 h-2 w-32 rounded"></div>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>
+                    {progressData.attempted}/{progressData.target} questions
+                  </span>
+                  <span>
+                    {progressData.correct} correct
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">
+                  {getMotivationalMessage(progressData.percentage, progressData.attempted, progressData.target)}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
