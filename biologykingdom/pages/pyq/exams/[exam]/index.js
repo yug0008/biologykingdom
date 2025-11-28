@@ -1,248 +1,217 @@
 // pages/pyq/exams/[exam]/index.js
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
-import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../../../../lib/supabase';
-import { useAuth } from '../../../../hooks/useAuth';
-import { FiFilter, FiX, FiChevronRight, FiBook, FiBarChart2, FiClock } from 'react-icons/fi';
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/router'
+import Head from 'next/head'
+import { motion, AnimatePresence } from 'framer-motion'
+import { HydrationBoundary, dehydrate } from '@tanstack/react-query'
+import { queryClient } from '../../../../lib/react-query'
+import { useExamData, useSubjects, useChaptersWithStats } from '../../../../hooks/useExamData'
+import { useAuth } from '../../../../hooks/useAuth'
+import { useUserQuestionAttempts } from '../../../../hooks/useUserQuestionAttempts'
+import { FiFilter, FiX, FiChevronRight, FiBook, FiBarChart2, FiClock, FiLoader, FiCircle, FiMenu } from 'react-icons/fi'
 
 const difficultyCategories = [
   'All Categories',
   'High Output High Input',
-  'High Output Low Input',
+  'High Output Low Input', 
   'Low Output Low Input',
   'Low Output High Input'
-];
+]
 
-const yearRange = Array.from({ length: 18 }, (_, i) => 2025 - i); // 2008-2025
+const yearRange = Array.from({ length: 18 }, (_, i) => 2025 - i)
 
-export default function ExamPYQPage() {
-  const router = useRouter();
-  const { exam } = router.query;
-  const { user, loading: authLoading } = useAuth();
+// Skeleton Loaders
+const ChapterRowSkeleton = () => (
+  <div className="w-full bg-gray-700/50 border border-gray-600 rounded-xl p-4 animate-pulse">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center space-x-4 flex-1">
+        <div className="h-10 w-10 bg-gray-600 rounded-full"></div>
+        <div className="flex-1">
+          <div className="h-5 bg-gray-600 rounded w-3/4 mb-2"></div>
+          <div className="h-4 bg-gray-600 rounded w-1/2"></div>
+        </div>
+      </div>
+      <div className="flex space-x-6">
+        <div className="text-right">
+          <div className="h-5 bg-gray-600 rounded w-16 mb-1"></div>
+          <div className="h-4 bg-gray-600 rounded w-12"></div>
+        </div>
+        <div className="text-right">
+          <div className="h-5 bg-gray-600 rounded w-16 mb-1"></div>
+          <div className="h-4 bg-gray-600 rounded w-12"></div>
+        </div>
+        <div className="text-right">
+          <div className="h-5 bg-gray-600 rounded w-20 mb-1"></div>
+          <div className="h-4 bg-gray-600 rounded w-16"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
+const SubjectSkeleton = () => (
+  <div className="space-y-3">
+    {[...Array(6)].map((_, i) => (
+      <div key={i} className="w-full p-4 rounded-xl bg-gray-700/50 animate-pulse">
+        <div className="flex items-center space-x-3">
+          <div className="h-10 w-10 bg-gray-600 rounded-full"></div>
+          <div className="flex-1">
+            <div className="h-4 bg-gray-600 rounded w-3/4 mb-2"></div>
+            <div className="h-3 bg-gray-600 rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)
+
+// Update the hooks to use the correct query structure
+const useChaptersWithStatsClient = (subjectId, enabled = true) => {
+  return useChaptersWithStats(subjectId, enabled)
+}
+
+export default function ExamPYQPage({ dehydratedState, examSlug, initialSubjectId, error: initialError }) {
+  const router = useRouter()
+  const { exam } = router.query
+  const { user, loading: authLoading } = useAuth()
   
-  const [examData, setExamData] = useState(null);
-  const [subjects, setSubjects] = useState([]);
-  const [chapters, setChapters] = useState({});
-  const [selectedSubject, setSelectedSubject] = useState(null);
-  const [selectedDifficulty, setSelectedDifficulty] = useState('All Categories');
-  const [selectedYears, setSelectedYears] = useState([]);
-  const [filteredChapters, setFilteredChapters] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showSortPanel, setShowSortPanel] = useState(false);
-  const [sortBy, setSortBy] = useState('name');
+  const [selectedSubjectId, setSelectedSubjectId] = useState(initialSubjectId)
+  const [selectedDifficulty, setSelectedDifficulty] = useState('All Categories')
+  const [selectedYears, setSelectedYears] = useState([])
+  const [showSortPanel, setShowSortPanel] = useState(false)
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false)
+  const [sortBy, setSortBy] = useState('name')
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login');
+      router.push('/login')
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router])
 
-  // Fetch exam data and subjects
-  useEffect(() => {
-    if (!exam || !user) return;
+  // Data fetching with React Query
+  const {
+    data: examData,
+    error: examError,
+    isLoading: examLoading
+  } = useExamData(exam || examSlug, !!user)
 
-    const fetchExamData = async () => {
-      try {
-        setLoading(true);
-        setError('');
+  const {
+    data: subjects = [],
+    error: subjectsError,
+    isLoading: subjectsLoading
+  } = useSubjects(examData?.id, !!examData?.id)
 
-        // Fetch exam data
-        const { data: examData, error: examError } = await supabase
-          .from('exams')
-          .select('*')
-          .eq('slug', exam)
-          .single();
+  const {
+    data: chapters = [],
+    error: chaptersError,
+    isLoading: chaptersLoading,
+    isFetching: chaptersFetching
+  } = useChaptersWithStatsClient(selectedSubjectId, !!selectedSubjectId)
 
-        if (examError) throw examError;
-        setExamData(examData);
+  // Get user attempts for all chapters
+  const {
+    data: userAttempts = [],
+    isLoading: attemptsLoading
+  } = useUserQuestionAttempts(user?.id, selectedSubjectId)
 
-        // Fetch subjects for this exam
-        const { data: subjectsData, error: subjectsError } = await supabase
-          .from('subjects')
-          .select('*')
-          .eq('exam_id', examData.id)
-          .order('order');
-
-        if (subjectsError) throw subjectsError;
-        setSubjects(subjectsData);
-
-        if (subjectsData.length > 0) {
-          setSelectedSubject(subjectsData[0]);
-        }
-
-      } catch (err) {
-        console.error('Error fetching exam data:', err);
-        setError('Failed to load exam data');
-      } finally {
-        setLoading(false);
+  // Calculate attempted counts for each chapter
+  const chapterAttempts = useMemo(() => {
+    const attemptsMap = {}
+    userAttempts.forEach(attempt => {
+      if (!attemptsMap[attempt.chapter_id]) {
+        attemptsMap[attempt.chapter_id] = new Set()
       }
-    };
+      attemptsMap[attempt.chapter_id].add(attempt.question_id)
+    })
+    
+    const counts = {}
+    Object.keys(attemptsMap).forEach(chapterId => {
+      counts[chapterId] = attemptsMap[chapterId].size
+    })
+    
+    return counts
+  }, [userAttempts])
 
-    fetchExamData();
-  }, [exam, user]);
-
-  // Fetch chapters for selected subject
+  // Auto-select first subject if available
   useEffect(() => {
-    if (!selectedSubject || !user) return;
+    if (subjects.length > 0 && !selectedSubjectId) {
+      setSelectedSubjectId(subjects[0].id)
+    }
+  }, [subjects, selectedSubjectId])
 
-    const fetchChapters = async () => {
-      try {
-        // Fetch chapters
-        const { data: chaptersData, error: chaptersError } = await supabase
-          .from('chapters')
-          .select('*')
-          .eq('subject_id', selectedSubject.id)
-          .order('order');
+  // Filter and sort chapters
+  const filteredAndSortedChapters = useMemo(() => {
+    let filtered = chapters
 
-        if (chaptersError) throw chaptersError;
+    // Apply difficulty filter
+    if (selectedDifficulty !== 'All Categories') {
+      filtered = filtered.filter(chapter => 
+        chapter.difficultyStats[selectedDifficulty] > 0
+      )
+    }
 
-        // Fetch question counts and recent stats for each chapter
-        const chaptersWithStats = await Promise.all(
-          chaptersData.map(async (chapter) => {
-            // Total questions count
-            const { count: totalQuestions, error: countError } = await supabase
-              .from('questions')
-              .select('*', { count: 'exact', head: true })
-              .eq('chapter_id', chapter.id)
-              .eq('category', 'PYQ');
+    // Apply year filter
+    if (selectedYears.length > 0) {
+      filtered = filtered.filter(chapter =>
+        chapter.recentStats.some(stat => selectedYears.includes(stat.year))
+      )
+    }
 
-            if (countError) console.error('Error counting questions:', countError);
-
-            // Recent years stats (last 2 years)
-            const currentYear = new Date().getFullYear();
-            const recentStats = [];
-            
-            for (let year = currentYear; year >= currentYear - 1; year--) {
-              const { count: yearCount, error: yearError } = await supabase
-                .from('questions')
-                .select('*', { count: 'exact', head: true })
-                .eq('chapter_id', chapter.id)
-                .eq('category', 'PYQ')
-                .eq('year', year);
-
-              if (!yearError && yearCount > 0) {
-                recentStats.push({ year, count: yearCount });
-              }
-            }
-
-            // Difficulty stats
-            const difficultyStats = {};
-            for (const difficulty of difficultyCategories.slice(1)) {
-              const { count: diffCount, error: diffError } = await supabase
-                .from('questions')
-                .select('*', { count: 'exact', head: true })
-                .eq('chapter_id', chapter.id)
-                .eq('category', 'PYQ')
-                .eq('difficulty_category', difficulty);
-
-              if (!diffError) {
-                difficultyStats[difficulty] = diffCount || 0;
-              }
-            }
-
-            return {
-              ...chapter,
-              totalQuestions: totalQuestions || 0,
-              recentStats,
-              difficultyStats
-            };
-          })
-        );
-
-        setChapters(prev => ({
-          ...prev,
-          [selectedSubject.slug]: chaptersWithStats
-        }));
-
-      } catch (err) {
-        console.error('Error fetching chapters:', err);
-        setError('Failed to load chapters');
-      }
-    };
-
-    fetchChapters();
-  }, [selectedSubject, user]);
-
-  // Memoized filtered and sorted chapters
-  const sortedChapters = useMemo(() => {
-    if (!filteredChapters.length) return [];
-
-    return [...filteredChapters].sort((a, b) => {
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'name':
-          return a.name.localeCompare(b.name);
+          return a.name.localeCompare(b.name)
         case 'questions':
-          return b.totalQuestions - a.totalQuestions;
+          return b.totalQuestions - a.totalQuestions
         case 'recent':
-          const aRecent = a.recentStats.reduce((sum, stat) => sum + stat.count, 0);
-          const bRecent = b.recentStats.reduce((sum, stat) => sum + stat.count, 0);
-          return bRecent - aRecent;
+          const aRecent = a.recentStats.reduce((sum, stat) => sum + stat.count, 0)
+          const bRecent = b.recentStats.reduce((sum, stat) => sum + stat.count, 0)
+          return bRecent - aRecent
         default:
-          return a.order - b.order;
+          return a.order - b.order
       }
-    });
-  }, [filteredChapters, sortBy]);
-
-  // Filter chapters based on selected filters
-  useEffect(() => {
-    if (selectedSubject && chapters[selectedSubject.slug]) {
-      let filtered = chapters[selectedSubject.slug];
-
-      // Apply difficulty filter
-      if (selectedDifficulty !== 'All Categories') {
-        filtered = filtered.filter(chapter => 
-          chapter.difficultyStats[selectedDifficulty] > 0
-        );
-      }
-
-      // Apply year filter
-      if (selectedYears.length > 0) {
-        filtered = filtered.filter(chapter => 
-          chapter.recentStats.some(stat => selectedYears.includes(stat.year))
-        );
-      }
-
-      setFilteredChapters(filtered);
-    }
-  }, [selectedSubject, selectedDifficulty, selectedYears, chapters]);
+    })
+  }, [chapters, selectedDifficulty, selectedYears, sortBy])
 
   const toggleYear = (year) => {
     setSelectedYears(prev =>
       prev.includes(year)
         ? prev.filter(y => y !== year)
         : [...prev, year]
-    );
-  };
-
-  const selectAllYears = () => {
-    setSelectedYears(yearRange);
-  };
-
-  const clearAllYears = () => {
-    setSelectedYears([]);
-  };
-
-  const applySortAndClose = () => {
-    setShowSortPanel(false);
-  };
-
-  // Show loading state
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
-      </div>
-    );
+    )
   }
 
-  // Show error state
+  const selectAllYears = () => setSelectedYears(yearRange)
+  const clearAllYears = () => setSelectedYears([])
+
+  const handleSubjectChange = (subjectId) => {
+    setSelectedSubjectId(subjectId)
+    setShowMobileSidebar(false)
+    // Clear filters when changing subject
+    setSelectedDifficulty('All Categories')
+    setSelectedYears([])
+  }
+
+  const applySortAndClose = () => setShowSortPanel(false)
+
+  // Error states
+  const error = initialError || examError || subjectsError || chaptersError
+
+  // Loading state
+  if (authLoading || examLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+      </div>
+    )
+  }
+
+  // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-2">Error</h1>
           <p className="text-gray-300">{error}</p>
@@ -254,25 +223,28 @@ export default function ExamPYQPage() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   if (!examData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-2">Exam Not Found</h1>
           <p className="text-gray-300">The requested exam could not be found.</p>
         </div>
       </div>
-    );
+    )
   }
 
+  const selectedSubject = subjects.find(s => s.id === selectedSubjectId)
+
   return (
-    <>
+    <HydrationBoundary state={dehydratedState}>
       <Head>
         <title>{examData.name} PYQs | Study Platform</title>
         <meta name="description" content={`Previous Year Questions for ${examData.name}`} />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
 
       {/* Custom scrollbar styles */}
@@ -291,58 +263,53 @@ export default function ExamPYQPage() {
         .year-filter::-webkit-scrollbar-thumb:hover {
           background: #9CA3AF;
         }
-        .chapter-scroll::-webkit-scrollbar {
-          height: 6px;
-        }
-        .chapter-scroll::-webkit-scrollbar-track {
-          background: #1F2937;
-          border-radius: 3px;
-        }
-        .chapter-scroll::-webkit-scrollbar-thumb {
-          background: #4B5563;
-          border-radius: 3px;
-        }
-        .chapter-scroll::-webkit-scrollbar-thumb:hover {
-          background: #6B7280;
-        }
       `}</style>
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-800">
         {/* Background Elements */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-gray-900 to-gray-900"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-slate-900 to-slate-900"></div>
         
         {/* Header */}
-        <div className="relative z-10 bg-gray-800/50 backdrop-blur-lg border-b border-gray-700">
+        <div className="relative z-10 bg-slate-900 backdrop-blur-lg border-b border-slate-700 shadow-xl">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 min-w-0">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
                 <button
                   onClick={() => router.push('/')}
-                  className="flex-shrink-0 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                  className="flex-shrink-0 p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-200 hover:scale-105"
                 >
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                
+                {/* Mobile Menu Button */}
+                <button
+                  onClick={() => setShowMobileSidebar(true)}
+                  className="lg:hidden flex-shrink-0 p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-200"
+                >
+                  <FiMenu className="w-4 h-4 text-white" />
+                </button>
+
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">
                   {examData.logo_url ? (
                     <img 
                       src={examData.logo_url} 
                       alt={examData.name}
-                      className="w-6 h-6 object-contain"
+                      className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
                     />
                   ) : (
-                    <span className="text-white font-bold text-sm">
+                    <span className="text-white font-bold text-sm sm:text-lg">
                       {examData.name.charAt(0)}
                     </span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-lg sm:text-xl font-bold text-white truncate font-poppins">
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white truncate font-poppins">
                     {examData.name} PYQs
                   </h1>
-                  <p className="text-gray-400 text-xs sm:text-sm truncate">
-                    {examData.year_range}
+                  <p className="text-slate-400 text-xs sm:text-sm md:text-base truncate">
+                    Master your preparation with previous year questions
                   </p>
                 </div>
               </div>
@@ -350,325 +317,353 @@ export default function ExamPYQPage() {
               {/* Sort Button */}
               <button
                 onClick={() => setShowSortPanel(true)}
-                className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded-lg transition-colors flex-shrink-0"
+                className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg flex-shrink-0 group ml-2"
               >
-                <FiFilter className="w-4 h-4 text-white" />
-                <span className="text-white text-sm font-medium hidden sm:block">Sort & Filter</span>
+                <FiFilter className="w-4 h-4 sm:w-5 sm:h-5 text-white group-hover:rotate-12 transition-transform" />
+                <span className="text-white text-xs sm:text-sm font-semibold hidden sm:block">Sort & Filter</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Subjects Sidebar */}
-            <div className="lg:w-64 flex-shrink-0">
-              <div className="bg-gray-800/50 backdrop-blur-lg border border-gray-700 rounded-2xl p-4 sticky top-24">
-                <h2 className="text-lg font-semibold text-white mb-4 font-poppins">Subjects</h2>
-                <div className="space-y-2">
-                  {subjects.map((subject) => (
-                    <button
-                      key={subject.id}
-                      onClick={() => setSelectedSubject(subject)}
-                      className={`w-full text-left p-3 rounded-xl transition-all duration-200 group ${
-                        selectedSubject?.id === subject.id
-                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg'
-                          : 'bg-gray-700/50 hover:bg-gray-700 border border-transparent hover:border-gray-600'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className={`font-medium text-sm ${
-                          selectedSubject?.id === subject.id ? 'text-white' : 'text-gray-200 group-hover:text-white'
-                        }`}>
-                          {subject.name}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          selectedSubject?.id === subject.id
-                            ? 'bg-white/20 text-white'
-                            : 'bg-gray-600 text-gray-300 group-hover:bg-gray-500'
-                        }`}>
-                          {chapters[subject.slug]?.reduce((total, chapter) => total + chapter.totalQuestions, 0) || 0}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+        <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="flex gap-4 lg:gap-8">
+            {/* Mobile Sidebar Overlay */}
+            <AnimatePresence>
+              {showMobileSidebar && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowMobileSidebar(false)}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+                  />
+                  
+                  <motion.div
+                    initial={{ x: '-100%' }}
+                    animate={{ x: 0 }}
+                    exit={{ x: '-100%' }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                    className="fixed left-0 top-0 bottom-0 w-80 bg-slate-900 border-r border-slate-700 z-50 overflow-y-auto shadow-2xl lg:hidden"
+                  >
+                    <SidebarContent 
+                      examData={examData}
+                      subjects={subjects}
+                      selectedSubjectId={selectedSubjectId}
+                      onSubjectChange={handleSubjectChange}
+                      exam={exam}
+                      router={router}
+                    />
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:block w-72 flex-shrink-0">
+              <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700 rounded-3xl p-6 h-[calc(100vh-8rem)] sticky top-24 shadow-xl overflow-hidden flex flex-col">
+                <SidebarContent 
+                  examData={examData}
+                  subjects={subjects}
+                  selectedSubjectId={selectedSubjectId}
+                  onSubjectChange={handleSubjectChange}
+                  exam={exam}
+                  router={router}
+                />
               </div>
             </div>
 
-            {/* Main Content - Chapters */}
+            {/* Main Content - Enhanced Chapter List */}
             <div className="flex-1 min-w-0">
               {selectedSubject && (
-                <div className="bg-gray-800/50 backdrop-blur-lg border border-gray-700 rounded-2xl p-4 sm:p-6">
-                  {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-3 sm:space-y-0">
-                    <div>
-                      <h2 className="text-xl sm:text-2xl font-bold text-white font-poppins">
-                        {selectedSubject.name} Chapters
-                      </h2>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {sortedChapters.length} chapters • {sortedChapters.reduce((total, chapter) => total + chapter.totalQuestions, 0)} questions
+                <div className="bg-slate-800 backdrop-blur-lg  border-slate-700 rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl">
+                  {/* Enhanced Header */}
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 lg:mb-8 space-y-3 lg:space-y-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 sm:space-x-3 mb-2">
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-poppins truncate">
+                          {selectedSubject.name}
+                        </h2>
+                        {chaptersFetching && (
+                          <FiLoader className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 animate-spin" />
+                        )}
+                      </div>
+                      <p className="text-slate-400 text-sm sm:text-base">
+                        {filteredAndSortedChapters.length} chapters • 
+                        {' '}{filteredAndSortedChapters.reduce((total, chapter) => total + chapter.totalQuestions, 0)} questions
+                        {chaptersFetching && ' • Loading...'}
                       </p>
                     </div>
                     
-                    {/* Active Filters Badge */}
-                    <div className="flex items-center space-x-2">
+                    {/* Active Filters */}
+                    <div className="flex flex-wrap gap-2">
                       {(selectedDifficulty !== 'All Categories' || selectedYears.length > 0) && (
-                        <div className="bg-purple-600/20 border border-purple-500/30 rounded-lg px-3 py-1">
-                          <span className="text-purple-300 text-sm">
-                            {selectedDifficulty !== 'All Categories' ? '1 filter' : ''}
-                            {selectedYears.length > 0 ? ` ${selectedYears.length} years` : ''}
-                          </span>
-                        </div>
+                        <>
+                          {selectedDifficulty !== 'All Categories' && (
+                            <div className="bg-purple-600/20 border border-purple-500/30 rounded-lg sm:rounded-xl px-2 py-1 sm:px-3 sm:py-2">
+                              <span className="text-purple-300 text-xs sm:text-sm font-medium">
+                                {selectedDifficulty}
+                              </span>
+                            </div>
+                          )}
+                          {selectedYears.length > 0 && (
+                            <div className="bg-blue-600/20 border border-blue-500/30 rounded-lg sm:rounded-xl px-2 py-1 sm:px-3 sm:py-2">
+                              <span className="text-blue-300 text-xs sm:text-sm font-medium">
+                                {selectedYears.length} years
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
 
-                  {/* Chapters Grid - Horizontal Scroll */}
-                  <div className="chapter-scroll overflow-x-auto pb-4">
-                    <div className="flex space-x-4 min-w-max">
-                      {sortedChapters.map((chapter, index) => (
-                        <motion.div
-                          key={chapter.id}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          whileHover={{ 
-                            scale: 1.02,
-                            transition: { duration: 0.2 }
-                          }}
-                          className="group cursor-pointer flex-shrink-0"
-                          onClick={() => router.push(`/pyq/exams/${exam}/${selectedSubject.slug}/${chapter.slug}`)}
-                        >
-                          <div className="w-80 bg-gradient-to-br from-gray-700/50 to-gray-800/50 border border-gray-600 rounded-2xl p-5 hover:border-purple-500/50 hover:shadow-2xl transition-all duration-300 group relative overflow-hidden">
-                            {/* Background Glow */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                            
-                            <div className="relative z-10">
-                              {/* Chapter Header */}
-                              <div className="flex justify-between items-start mb-4">
-                                <h3 className="text-lg font-semibold text-white group-hover:text-purple-200 transition-colors line-clamp-2 flex-1 mr-3">
-                                  {chapter.name}
-                                </h3>
-                                <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full font-medium whitespace-nowrap flex-shrink-0">
-                                  {chapter.totalQuestions} Qs
-                                </span>
-                              </div>
+                  {/* Chapters List - Responsive Rows */}
+                  <div className="space-y-3 sm:space-y-4">
+                    {chaptersLoading ? (
+                      // Show skeletons while loading
+                      [...Array(6)].map((_, index) => (
+                        <ChapterRowSkeleton key={index} />
+                      ))
+                    ) : filteredAndSortedChapters.length > 0 ? (
+                      // Show actual chapters in rows
+                      filteredAndSortedChapters.map((chapter, index) => {
+                        const lastYearStat = chapter.recentStats[0]
+                        const secondLastYearStat = chapter.recentStats[1]
+                        const attemptedCount = chapterAttempts[chapter.id] || 0
+                        
+                        return (
+                          <motion.div
+                            key={chapter.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            whileHover={{ 
+                              scale: 1.01,
+                              transition: { duration: 0.2 }
+                            }}
+                            className="group cursor-pointer"
+                            onClick={() => router.push(`/pyq/exams/${exam}/${selectedSubject.slug}/${chapter.slug}`)}
+                          >
+                            <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border-2 border-slate-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:border-purple-500/50 hover:shadow-lg sm:hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 group relative overflow-hidden">
+                              {/* Background Glow Effect */}
+                              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                              
+                              <div className="relative z-10">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                                  {/* Chapter Info */}
+                                  <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-500/20 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                                      <FiCircle className="w-3 h-3 sm:w-4 sm:h-4 sm:w-5 sm:h-5 text-purple-400" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <h3 className="font-bold text-white group-hover:text-purple-200 transition-colors truncate text-sm sm:text-base md:text-lg font-poppins">
+                                        {chapter.name}
+                                      </h3>
+                                      <p className="text-slate-400 text-xs sm:text-sm truncate">
+                                        Chapter {chapter.order}
+                                      </p>
+                                    </div>
+                                  </div>
 
-                              {/* Stats Grid */}
-                              <div className="grid grid-cols-2 gap-4 mb-4">
-                                {/* Recent Questions */}
-                                <div className="flex items-center space-x-2">
-                                  <FiClock className="w-4 h-4 text-blue-400" />
-                                  <div>
-                                    <div className="text-xs text-gray-400">Recent</div>
-                                    <div className="text-sm font-semibold text-white">
-                                      {chapter.recentStats.reduce((sum, stat) => sum + stat.count, 0)} Qs
+                                  {/* Stats */}
+                                  <div className="flex items-center justify-between sm:justify-end space-x-4 sm:space-x-6 lg:space-x-8">
+                                    {/* Last Year Questions */}
+                                    {lastYearStat && (
+                                      <div className="text-right">
+                                        <div className="text-xs sm:text-sm md:text-base font-semibold text-white">
+                                          {lastYearStat.year}: {lastYearStat.count} Qs
+                                        </div>
+                                        <div className="text-[10px] sm:text-xs text-slate-400">
+                                          Last Year
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Second Last Year Questions */}
+                                    {secondLastYearStat && (
+                                      <div className="text-right">
+                                        <div className="text-xs sm:text-sm md:text-base font-semibold text-white">
+                                          {secondLastYearStat.year}: {secondLastYearStat.count} Qs
+                                        </div>
+                                        <div className="text-[10px] sm:text-xs text-slate-400">
+                                          Previous Year
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    <div className="text-right">
+                                      <div className="text-xs sm:text-sm md:text-base font-semibold text-white">
+                                        {attemptedCount}/{chapter.totalQuestions} Qs
+                                      </div>
+                                      <div className="text-[10px] sm:text-xs text-slate-400">
+                                        Attempted
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
-
-                                {/* Difficulty */}
-                                <div className="flex items-center space-x-2">
-                                  <FiBarChart2 className="w-4 h-4 text-purple-400" />
-                                  <div>
-                                    <div className="text-xs text-gray-400">Mixed</div>
-                                    <div className="text-sm font-semibold text-white">Levels</div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Recent Years */}
-                              {chapter.recentStats.length > 0 && (
-                                <div className="mb-4">
-                                  <div className="text-xs text-gray-400 mb-2">Latest Pattern:</div>
-                                  <div className="flex space-x-2">
-                                    {chapter.recentStats.map((stat, idx) => (
-                                      <div key={idx} className="flex items-center space-x-1 bg-gray-700/50 px-2 py-1 rounded">
-                                        <span className="text-xs text-white font-medium">{stat.year}</span>
-                                        <span className="text-xs text-green-400">({stat.count})</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Progress Bar */}
-                              <div className="mb-4">
-                                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                  <span>Completion</span>
-                                  <span>0%</span>
-                                </div>
-                                <div className="w-full bg-gray-700 rounded-full h-1.5">
-                                  <div className="bg-gradient-to-r from-purple-500 to-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: '0%' }}></div>
-                                </div>
-                              </div>
-
-                              {/* Action Button */}
-                              <div className="flex items-center justify-between">
-                                <span className="text-purple-400 text-sm font-semibold group-hover:text-purple-300 flex items-center transition-colors">
-                                  Start Now
-                                  <FiChevronRight className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" />
-                                </span>
-                                <div className="flex items-center space-x-1 text-xs text-gray-400">
-                                  <FiBook className="w-3 h-3" />
-                                  <span>PYQ</span>
-                                </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {sortedChapters.length === 0 && (
-                    <div className="text-center py-12">
-                      <div className="text-gray-400 text-lg font-medium mb-2">No chapters found</div>
-                      <div className="text-gray-500 text-sm">
-                        {chapters[selectedSubject.slug]?.length === 0 
-                          ? 'No chapters available for this subject'
-                          : 'Try adjusting your filters or select a different subject'
-                        }
+                          </motion.div>
+                        )
+                      })
+                    ) : (
+                      // Empty state
+                      <div className="text-center py-12 sm:py-16">
+                        <div className="text-slate-400 text-lg sm:text-xl font-medium mb-2 sm:mb-3">No chapters found</div>
+                        <div className="text-slate-500 text-sm sm:text-base">
+                          {chapters.length === 0 
+                            ? 'No chapters available for this subject'
+                            : 'Try adjusting your filters or select a different subject'
+                          }
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Sort Panel Overlay */}
+        {/* Enhanced Sort Panel */}
         <AnimatePresence>
           {showSortPanel && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowSortPanel(false)}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
               />
               
-              {/* Sort Panel */}
               <motion.div
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                className="fixed left-0 top-0 bottom-0 w-full max-w-md bg-gray-900 border-r border-gray-700 z-50 overflow-y-auto"
+                className="fixed left-0 top-0 bottom-0 w-full max-w-sm sm:max-w-md bg-slate-900 border-r border-slate-700 z-50 overflow-y-auto shadow-2xl"
               >
-                <div className="p-6">
+                <div className="p-4 sm:p-6 h-full flex flex-col">
                   {/* Header */}
-                  <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-2xl font-bold text-white font-poppins">Sort & Filter</h2>
+                  <div className="flex items-center justify-between mb-6 sm:mb-8">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white font-poppins">Sort & Filter</h2>
                     <button
                       onClick={() => setShowSortPanel(false)}
-                      className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                      className="p-2 hover:bg-slate-800 rounded-xl transition-colors"
                     >
-                      <FiX className="w-6 h-6 text-gray-400" />
+                      <FiX className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" />
                     </button>
                   </div>
 
-                  {/* Sort By */}
-                  <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-white mb-4 font-poppins">Sort By</h3>
-                    <div className="space-y-2">
-                      {[
-                        { value: 'name', label: 'Chapter Name', icon: '📝' },
-                        { value: 'questions', label: 'Total Questions', icon: '❓' },
-                        { value: 'recent', label: 'Recent Questions', icon: '🕒' },
-                        { value: 'default', label: 'Default Order', icon: '🔢' }
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => setSortBy(option.value)}
-                          className={`w-full text-left p-4 rounded-xl transition-all duration-200 ${
-                            sortBy === option.value
-                              ? 'bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg'
-                              : 'bg-gray-800 hover:bg-gray-700'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <span className="text-lg">{option.icon}</span>
-                            <span className={`font-medium ${
-                              sortBy === option.value ? 'text-white' : 'text-gray-200'
-                            }`}>
-                              {option.label}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Difficulty Filter */}
-                  <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-white mb-4 font-poppins">Difficulty Category</h3>
-                    <div className="space-y-2">
-                      {difficultyCategories.map((category) => (
-                        <button
-                          key={category}
-                          onClick={() => setSelectedDifficulty(category)}
-                          className={`w-full text-left p-4 rounded-xl transition-all duration-200 ${
-                            selectedDifficulty === category
-                              ? 'bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg'
-                              : 'bg-gray-800 hover:bg-gray-700'
-                          }`}
-                        >
-                          <span className={`font-medium ${
-                            selectedDifficulty === category ? 'text-white' : 'text-gray-200'
-                          }`}>
-                            {category}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Year Filter */}
-                  <div className="mb-8">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-white font-poppins">Select Years</h3>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={selectAllYears}
-                          className="text-sm text-purple-400 hover:text-purple-300 font-medium px-3 py-1 bg-purple-600/20 rounded-lg transition-colors"
-                        >
-                          All
-                        </button>
-                        <button
-                          onClick={clearAllYears}
-                          className="text-sm text-gray-400 hover:text-gray-300 font-medium px-3 py-1 bg-gray-700 rounded-lg transition-colors"
-                        >
-                          Clear
-                        </button>
+                  <div className="flex-1 space-y-6 sm:space-y-8">
+                    {/* Sort By */}
+                    <div>
+                      <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 font-poppins">Sort By</h3>
+                      <div className="space-y-2 sm:space-y-3">
+                        {[
+                          { value: 'name', label: 'Chapter Name', icon: '📝', desc: 'Alphabetical order' },
+                          { value: 'questions', label: 'Total Questions', icon: '❓', desc: 'Most questions first' },
+                          { value: 'recent', label: 'Recent Questions', icon: '🕒', desc: 'Latest patterns first' },
+                          { value: 'default', label: 'Default Order', icon: '🔢', desc: 'Original chapter order' }
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={() => setSortBy(option.value)}
+                            className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all duration-200 border-2 ${
+                              sortBy === option.value
+                                ? 'bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-500/25'
+                                : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3 sm:space-x-4">
+                              <span className="text-xl sm:text-2xl">{option.icon}</span>
+                              <div className="flex-1">
+                                <div className={`font-semibold text-sm sm:text-base ${
+                                  sortBy === option.value ? 'text-white' : 'text-slate-200'
+                                }`}>
+                                  {option.label}
+                                </div>
+                                <div className={`text-xs sm:text-sm ${
+                                  sortBy === option.value ? 'text-purple-300' : 'text-slate-400'
+                                }`}>
+                                  {option.desc}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="max-h-64 overflow-y-auto space-y-2 year-filter border border-gray-700 rounded-xl p-4 bg-gray-800">
-                      {yearRange.map((year) => (
-                        <label key={year} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-700 px-3 py-2 rounded-lg transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={selectedYears.includes(year)}
-                            onChange={() => toggleYear(year)}
-                            className="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-purple-500 focus:ring-offset-gray-900"
-                          />
-                          <span className="text-gray-200 text-sm flex-1">{year}</span>
-                          {selectedYears.includes(year) && (
-                            <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          )}
-                        </label>
-                      ))}
+
+                    {/* Difficulty Filter */}
+                    <div>
+                      <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 font-poppins">Difficulty Category</h3>
+                      <div className="space-y-2 sm:space-y-3">
+                        {difficultyCategories.map((category) => (
+                          <button
+                            key={category}
+                            onClick={() => setSelectedDifficulty(category)}
+                            className={`w-full text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all duration-200 border-2 ${
+                              selectedDifficulty === category
+                                ? 'bg-purple-600/20 border-purple-500/50 shadow-lg shadow-purple-500/25'
+                                : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <span className={`font-medium text-sm sm:text-base ${
+                              selectedDifficulty === category ? 'text-white' : 'text-slate-200'
+                            }`}>
+                              {category}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Year Filter */}
+                    <div>
+                      <div className="flex justify-between items-center mb-3 sm:mb-4">
+                        <h3 className="text-base sm:text-lg font-semibold text-white font-poppins">Select Years</h3>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={selectAllYears}
+                            className="text-xs sm:text-sm text-purple-400 hover:text-purple-300 font-medium px-2 py-1 sm:px-3 sm:py-1 bg-purple-600/20 rounded-lg transition-colors"
+                          >
+                            All
+                          </button>
+                          <button
+                            onClick={clearAllYears}
+                            className="text-xs sm:text-sm text-slate-400 hover:text-slate-300 font-medium px-2 py-1 sm:px-3 sm:py-1 bg-slate-700 rounded-lg transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="max-h-48 sm:max-h-64 overflow-y-auto space-y-1 sm:space-y-2 year-filter border-2 border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-800">
+                        {yearRange.map((year) => (
+                          <label key={year} className="flex items-center space-x-2 sm:space-x-3 cursor-pointer hover:bg-slate-700 px-2 py-2 sm:px-3 sm:py-3 rounded-lg sm:rounded-xl transition-colors group">
+                            <input
+                              type="checkbox"
+                              checked={selectedYears.includes(year)}
+                              onChange={() => toggleYear(year)}
+                              className="rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500 focus:ring-offset-slate-900 w-3 h-3 sm:w-4 sm:h-4"
+                            />
+                            <span className="text-slate-200 text-xs sm:text-sm flex-1 group-hover:text-white">{year}</span>
+                            {selectedYears.includes(year) && (
+                              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-500 rounded-full"></div>
+                            )}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
                   {/* Apply Button */}
                   <button
                     onClick={applySortAndClose}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 font-poppins"
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 sm:py-4 px-6 rounded-xl sm:rounded-2xl transition-all duration-200 transform hover:scale-105 font-poppins mt-6 sm:mt-8 shadow-lg text-sm sm:text-base"
                   >
                     Apply Filters
                   </button>
@@ -678,6 +673,74 @@ export default function ExamPYQPage() {
           )}
         </AnimatePresence>
       </div>
+    </HydrationBoundary>
+  )
+}
+
+// Sidebar Content Component
+const SidebarContent = ({ examData, subjects, selectedSubjectId, onSubjectChange, exam, router }) => {
+  return (
+    <>
+      {/* Exam Header */}
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-lg sm:text-xl font-bold text-white flex items-center space-x-2">
+          {examData?.logo_url && (
+            <img src={examData.logo_url} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full" alt={examData.name} />
+          )}
+          <span>{examData?.name}</span>
+        </h1>
+        <p className="text-slate-400 mt-2 text-xs sm:text-sm">
+          {examData?.year_range} • {examData?.total_papers} Papers • {examData?.total_questions} Qs
+        </p>
+      </div>
+
+      {/* Subjects List */}
+      <div className="flex-1 overflow-y-auto space-y-2">
+        {subjects?.map((sub) => {
+          const isActive = selectedSubjectId === sub.id
+          return (
+            <div
+              key={sub.id}
+              onClick={() => onSubjectChange(sub.id)}
+              className={`w-full flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-200 ${
+                isActive
+                  ? "bg-white text-black font-semibold shadow-lg"
+                  : "bg-slate-700/40 text-slate-300 hover:bg-slate-700/70"
+              }`}
+            >
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <span className={`text-lg sm:text-xl ${sub.color || "text-blue-400"}`}>
+                  {sub.icon ? <img src={sub.icon} className="w-4 h-4 sm:w-5 sm:h-5" alt="" /> : <FiCircle />}
+                </span>
+                <span className="text-sm sm:text-base">{sub.name}</span>
+              </div>
+              {sub.badge && (
+                <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full">
+                  {sub.badge}
+                </span>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Analysis Item */}
+        <div
+          onClick={() => router.push(`/pyq/exams/${exam}/analysis`)}
+          className={`w-full flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl cursor-pointer transition-all duration-200 ${
+            router.pathname.includes("/analysis")
+              ? "bg-white text-black font-semibold shadow-lg"
+              : "bg-slate-700/40 text-slate-300 hover:bg-slate-700/70"
+          }`}
+        >
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <FiBarChart2 className="text-lg sm:text-xl text-cyan-400" />
+            <span className="text-sm sm:text-base">Analysis</span>
+          </div>
+          <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full">
+            NEW
+          </span>
+        </div>
+      </div>
     </>
-  );
+  )
 }
