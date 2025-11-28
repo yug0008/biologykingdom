@@ -204,6 +204,58 @@ export async function getServerSideProps(context) {
 // Component for Overview Content
 const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => (
   <>
+   {/* Quick Actions */}
+    <div className="grid mb-8 grid-cols-1 md:grid-cols-2 gap-6">
+      {/* All PYQs Card */}
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-2xl p-6 cursor-pointer group"
+        onClick={() => onMenuChange('all-pyqs')}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <FiList className="w-8 h-8 text-purple-400" />
+          <div className="bg-white/10 px-3 py-1 rounded-full">
+            <span className="text-white text-sm font-semibold">{questions.length} Qs</span>
+          </div>
+        </div>
+        <h3 className="text-xl font-semibold text-white mb-2 font-poppins">All PYQs</h3>
+        <p className="text-gray-300 text-sm mb-4">
+          Practice all previous year questions in sequence
+        </p>
+        <div className="flex items-center text-purple-400 group-hover:text-purple-300 transition-colors">
+          <span className="font-semibold">Start Practicing</span>
+          <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </motion.div>
+
+      {/* Topic-wise PYQs Card */}
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="bg-gradient-to-br from-green-600/20 to-blue-600/20 border border-green-500/30 rounded-2xl p-6 cursor-pointer group"
+        onClick={() => onMenuChange('topic-wise')}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <FiFolder className="w-8 h-8 text-green-400" />
+          <div className="bg-white/10 px-3 py-1 rounded-full">
+            <span className="text-white text-sm font-semibold">{topics.length} Topics</span>
+          </div>
+        </div>
+        <h3 className="text-xl font-semibold text-white mb-2 font-poppins">Topic-wise PYQs</h3>
+        <p className="text-gray-300 text-sm mb-4">
+          Practice questions organized by specific topics
+        </p>
+        <div className="flex items-center text-green-400 group-hover:text-green-300 transition-colors">
+          <span className="font-semibold">Browse Topics</span>
+          <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </motion.div>
+    </div>
     {/* Progress Overview */}
     <div className="mb-8">
       <h2 className="text-2xl font-bold text-white mb-6 font-poppins">Your Progress</h2>
@@ -279,58 +331,7 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
       )}
     </div>
 
-    {/* Quick Actions */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {/* All PYQs Card */}
-      <motion.div
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-2xl p-6 cursor-pointer group"
-        onClick={() => onMenuChange('all-pyqs')}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <FiList className="w-8 h-8 text-purple-400" />
-          <div className="bg-white/10 px-3 py-1 rounded-full">
-            <span className="text-white text-sm font-semibold">{questions.length} Qs</span>
-          </div>
-        </div>
-        <h3 className="text-xl font-semibold text-white mb-2 font-poppins">All PYQs</h3>
-        <p className="text-gray-300 text-sm mb-4">
-          Practice all previous year questions in sequence
-        </p>
-        <div className="flex items-center text-purple-400 group-hover:text-purple-300 transition-colors">
-          <span className="font-semibold">Start Practicing</span>
-          <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      </motion.div>
-
-      {/* Topic-wise PYQs Card */}
-      <motion.div
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="bg-gradient-to-br from-green-600/20 to-blue-600/20 border border-green-500/30 rounded-2xl p-6 cursor-pointer group"
-        onClick={() => onMenuChange('topic-wise')}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <FiFolder className="w-8 h-8 text-green-400" />
-          <div className="bg-white/10 px-3 py-1 rounded-full">
-            <span className="text-white text-sm font-semibold">{topics.length} Topics</span>
-          </div>
-        </div>
-        <h3 className="text-xl font-semibold text-white mb-2 font-poppins">Topic-wise PYQs</h3>
-        <p className="text-gray-300 text-sm mb-4">
-          Practice questions organized by specific topics
-        </p>
-        <div className="flex items-center text-green-400 group-hover:text-green-300 transition-colors">
-          <span className="font-semibold">Browse Topics</span>
-          <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      </motion.div>
-    </div>
+   
   </>
 );
 
