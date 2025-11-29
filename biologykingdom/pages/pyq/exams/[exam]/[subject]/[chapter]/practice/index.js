@@ -176,94 +176,45 @@ const findCorrectOptionId = (options, correctAnswer) => {
   return null;
 };
 
-// CORRECTED: Content renderer that properly handles LaTeX
+// Function to clean LaTeX content for display
+const cleanLaTeXContent = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  
+  // Remove extra backslashes and clean up LaTeX formatting
+  return text
+    .replace(/\\\\\(/g, '(')  // Replace \\\( with (
+    .replace(/\\\\\)/g, ')')  // Replace \\\) with )
+    .replace(/\\\(/g, '(')    // Replace \( with (
+    .replace(/\\\)/g, ')')    // Replace \) with )
+    .replace(/\\\\text\{/g, '') // Remove \text{
+    .replace(/\}/g, '')       // Remove closing braces
+    .replace(/\\,/g, ' ')     // Replace \, with space
+    .replace(/\\Big\|/g, '|') // Replace \Big| with |
+    .replace(/\\sqrt\{/g, '√') // Replace \sqrt{ with √
+    .replace(/\^2/g, '²')     // Replace ^2 with ²
+    .replace(/\^3/g, '³')     // Replace ^3 with ³
+    .replace(/\\frac\{(\d+)\}\{(\d+)\}/g, '$1/$2') // Replace \frac{num}{den} with num/den
+    .replace(/\\int_\{(\d+)\}\^\{(\d+)\}/g, '∫$1→$2') // Replace \int_{a}^{b} with ∫a→b
+    .replace(/\\,\\text\{m\/s\}/g, ' m/s') // Clean up units
+    .replace(/\\text\{m\/s\}/g, ' m/s') // Clean up units
+    .trim();
+};
+
+// Content renderer that properly handles LaTeX and displays it cleanly
 const RenderContent = ({ blocks, className = '' }) => {
   const parsedBlocks = parseQuestionBlocks(blocks);
   
-  const renderTextWithLaTeX = (text) => {
+  const renderCleanText = (text) => {
     if (!text || typeof text !== 'string') return text;
     
-    // Handle ALL possible LaTeX formats in one pass
-    const parts = text.split(/(\\\\(?:\\(?:\(|\))|[^]|\\\(.*?\\\))|\\\(.*?\\\)|\$.*?\$|\$\$.*?\$\$)/g);
+    // Clean the text for display
+    const cleanText = cleanLaTeXContent(text);
     
-    const result = [];
-    let currentPart = '';
-    let inLaTeX = false;
-    let latexType = '';
-    
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      
-      if (!part) continue;
-      
-      // Check for LaTeX start patterns
-      if (part === '\\(' || part === '\\\\(' || part === '$' || part === '$$') {
-        if (currentPart) {
-          result.push(
-            <span key={result.length} className="text-gray-200">
-              {currentPart}
-            </span>
-          );
-          currentPart = '';
-        }
-        
-        inLaTeX = true;
-        latexType = part;
-        currentPart = part;
-      } 
-      // Check for LaTeX end patterns
-      else if ((part === '\\)' && latexType === '\\(') || 
-               (part === '\\\\)' && latexType === '\\\\(') ||
-               (part === '$' && latexType === '$') ||
-               (part === '$$' && latexType === '$$')) {
-        
-        currentPart += part;
-        
-        // Extract LaTeX content based on the type
-        let latexContent = '';
-        if (latexType === '\\(') {
-          latexContent = currentPart.slice(2, -2); // Remove \( and \)
-        } else if (latexType === '\\\\(') {
-          latexContent = currentPart.slice(3, -3); // Remove \\\( and \\\)
-        } else if (latexType === '$') {
-          latexContent = currentPart.slice(1, -1); // Remove $ and $
-        } else if (latexType === '$$') {
-          latexContent = currentPart.slice(2, -2); // Remove $$ and $$
-        }
-        
-        result.push(
-          <span
-            key={result.length}
-            className="font-mono bg-purple-900/40 px-2 py-1 rounded border border-purple-600 text-purple-200 mx-1"
-          >
-            {latexContent}
-          </span>
-        );
-        
-        currentPart = '';
-        inLaTeX = false;
-        latexType = '';
-      }
-      // If we're inside LaTeX, keep adding to current part
-      else if (inLaTeX) {
-        currentPart += part;
-      }
-      // Regular text
-      else {
-        currentPart += part;
-      }
-    }
-    
-    // Add any remaining text
-    if (currentPart) {
-      result.push(
-        <span key={result.length} className="text-gray-200">
-          {currentPart}
-        </span>
-      );
-    }
-    
-    return result;
+    return (
+      <span className="text-gray-200 leading-relaxed">
+        {cleanText}
+      </span>
+    );
   };
 
   return (
@@ -280,17 +231,8 @@ const RenderContent = ({ blocks, className = '' }) => {
         if (block.type === 'text') {
           return (
             <div key={index} className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-              {renderTextWithLaTeX(block.content)}
+              {renderCleanText(block.content)}
             </div>
-          );
-        } else if (block.type === 'latex') {
-          return (
-            <span
-              key={index}
-              className="font-mono bg-purple-900/40 px-2 py-1 rounded border border-purple-600 text-purple-200 mx-1"
-            >
-              {block.content}
-            </span>
           );
         } else if (block.type === 'image') {
           return (
@@ -308,7 +250,7 @@ const RenderContent = ({ blocks, className = '' }) => {
         } else {
           return (
             <span key={index} className="text-gray-200 leading-relaxed">
-              {block.content || JSON.stringify(block)}
+              {renderCleanText(block.content || JSON.stringify(block))}
             </span>
           );
         }
@@ -317,7 +259,7 @@ const RenderContent = ({ blocks, className = '' }) => {
   );
 };
 
-// Render options for objective questions
+// Render options for objective questions with clean display
 const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, correctAnswer }) => {
   const parsedOptions = parseOptions(options);
 
@@ -381,6 +323,66 @@ const RenderOptions = ({ options, selectedOption, onOptionSelect, showSolution, 
   );
 };
 
+// Improved function to get YouTube embed URL
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  
+  try {
+    // Clean the URL first
+    let cleanUrl = url.trim().replace(/"/g, ''); // Remove any quotes
+    
+    // Handle youtu.be short links
+    if (cleanUrl.includes('youtu.be/')) {
+      const videoId = cleanUrl.split('youtu.be/')[1]?.split('?')[0]?.split('&')[0];
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+      }
+    }
+    
+    // Handle youtube.com links
+    if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+      // Extract video ID from various YouTube URL formats
+      let videoId = null;
+      
+      // Try to get from v parameter
+      const vMatch = cleanUrl.match(/[?&]v=([^&?#]+)/);
+      if (vMatch) {
+        videoId = vMatch[1];
+      }
+      
+      // Try to get from youtu.be format
+      if (!videoId && cleanUrl.includes('youtu.be/')) {
+        videoId = cleanUrl.split('youtu.be/')[1]?.split(/[?&#]/)[0];
+      }
+      
+      // Try to get from embed format
+      if (!videoId && cleanUrl.includes('/embed/')) {
+        videoId = cleanUrl.split('/embed/')[1]?.split(/[?&#]/)[0];
+      }
+      
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+      }
+    }
+    
+    // If it's already an embed URL, return as is (with parameters)
+    if (cleanUrl.includes('youtube.com/embed/')) {
+      // Ensure it has the necessary parameters
+      const baseUrl = cleanUrl.split('?')[0];
+      const existingParams = cleanUrl.includes('?') ? cleanUrl.split('?')[1] : '';
+      const params = new URLSearchParams(existingParams);
+      params.set('rel', '0');
+      params.set('modestbranding', '1');
+      return `${baseUrl}?${params.toString()}`;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error parsing YouTube URL:', error, 'URL:', url);
+    return null;
+  }
+};
+
 export default function PracticePage() {
   const router = useRouter();
   const { exam, subject, chapter } = router.query;
@@ -396,6 +398,7 @@ export default function PracticePage() {
   const [showSolution, setShowSolution] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(true); // NEW: Timer control state
   const [userAttempts, setUserAttempts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -403,6 +406,8 @@ export default function PracticePage() {
 
   const solutionRef = useRef(null);
   const timerRef = useRef(null);
+  const correctSoundRef = useRef(null);
+  const wrongSoundRef = useRef(null);
 
   const currentQuestion = questions[currentQuestionIndex];
   const currentAttempt = userAttempts[currentQuestion?.id];
@@ -411,20 +416,43 @@ export default function PracticePage() {
   const rawCorrectAnswer = currentQuestion ? parseCorrectAnswer(currentQuestion.correct_answer) : null;
   const correctAnswerId = currentQuestion ? findCorrectOptionId(currentQuestion.options, rawCorrectAnswer) : null;
 
-  // Debug current question
-  useEffect(() => {
-    if (currentQuestion) {
-      console.log('=== CURRENT QUESTION DEBUG ===');
-      console.log('Question ID:', currentQuestion.id);
-      console.log('Question Type:', currentQuestion.question_type);
-      console.log('Raw Options:', currentQuestion.options);
-      console.log('Parsed Options:', parseOptions(currentQuestion.options));
-      console.log('Raw Correct Answer:', currentQuestion.correct_answer);
-      console.log('Parsed Correct Answer:', rawCorrectAnswer);
-      console.log('Correct Answer ID:', correctAnswerId);
-      console.log('=============================');
+  // NEW: Play sound function
+  const playSound = (isCorrect) => {
+    try {
+      if (isCorrect && correctSoundRef.current) {
+        correctSoundRef.current.currentTime = 0;
+        correctSoundRef.current.play().catch(e => console.log('Audio play failed:', e));
+      } else if (!isCorrect && wrongSoundRef.current) {
+        wrongSoundRef.current.currentTime = 0;
+        wrongSoundRef.current.play().catch(e => console.log('Audio play failed:', e));
+      }
+    } catch (error) {
+      console.log('Sound playback error:', error);
     }
-  }, [currentQuestion]);
+  };
+
+  // NEW: Timer control functions
+  const startTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setIsTimerRunning(true);
+    timerRef.current = setInterval(() => {
+      setTimer(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsTimerRunning(false);
+  };
+
+  const resetTimer = () => {
+    setTimer(0);
+  };
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -433,18 +461,26 @@ export default function PracticePage() {
     }
   }, [user, authLoading, router]);
 
-  // Start timer
+  // Start timer when component mounts or question changes
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setTimer(prev => prev + 1);
-    }, 1000);
+    if (isTimerRunning && !showSolution) {
+      startTimer();
+    }
 
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
     };
-  }, []);
+  }, [isTimerRunning, showSolution]);
+
+  // Reset timer and start when question changes
+  useEffect(() => {
+    if (!showSolution) {
+      resetTimer();
+      startTimer();
+    }
+  }, [currentQuestionIndex]);
 
   // Fetch all data
   useEffect(() => {
@@ -625,6 +661,9 @@ export default function PracticePage() {
       // Refresh attempts to get the latest data
       await fetchUserAttempts(questions.map(q => q.id));
 
+      // NEW: Play sound based on correctness
+      playSound(isCorrect);
+
     } catch (err) {
       console.error('Error saving attempt:', err);
       alert('Error saving your attempt. Please try again.');
@@ -633,12 +672,15 @@ export default function PracticePage() {
     }
   };
 
-  // Check answer
+  // Check answer - UPDATED to stop timer
   const checkAnswer = () => {
     if (!currentQuestion || !selectedOption) {
       alert('Please select an answer first!');
       return;
     }
+
+    // NEW: Stop the timer when checking answer
+    stopTimer();
 
     let isCorrect = false;
     
@@ -659,23 +701,23 @@ export default function PracticePage() {
     }, 300);
   };
 
-  // Navigate to next question
+  // Navigate to next question - UPDATED to handle timer
   const nextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setShowSolution(false);
-      // Reset timer for the new question
-      setTimer(0);
+      setSelectedOption(null);
+      // Timer will be automatically reset and started by useEffect
     }
   };
 
-  // Navigate to previous question
+  // Navigate to previous question - UPDATED to handle timer
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
       setShowSolution(false);
-      // Reset timer for the new question
-      setTimer(0);
+      setSelectedOption(null);
+      // Timer will be automatically reset and started by useEffect
     }
   };
 
@@ -793,12 +835,29 @@ export default function PracticePage() {
     );
   }
 
+  // Get YouTube embed URL for current question
+  const youtubeEmbedUrl = currentQuestion?.solution_video_url 
+    ? getYouTubeEmbedUrl(currentQuestion.solution_video_url)
+    : null;
+
   return (
     <>
       <Head>
         <title>Practice | {chapterData?.name} | {subjectData?.name} | {examData?.name}</title>
         <meta name="description" content={`Practice ${chapterData?.name} questions for ${examData?.name}`} />
       </Head>
+
+      {/* Hidden audio elements for sound effects */}
+      <audio 
+        ref={correctSoundRef} 
+        src="/achievement-sound.mp3" 
+        preload="auto"
+      />
+      <audio 
+        ref={wrongSoundRef} 
+        src="/wrongbeep.mp3" 
+        preload="auto"
+      />
 
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
         {/* Compact Header */}
@@ -825,9 +884,14 @@ export default function PracticePage() {
               </div>
 
               <div className="flex items-center space-x-4 flex-shrink-0">
-                <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1.5 rounded-lg">
+                <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
+                  showSolution ? 'bg-gray-600/20' : 'bg-purple-600/20'
+                }`}>
                   <FiClock className="w-3 h-3 text-purple-400" />
                   <span className="text-purple-300 text-sm font-mono">{formatTime(timer)}</span>
+                  {showSolution && (
+                    <span className="text-gray-400 text-xs">(Taken)</span>
+                  )}
                 </div>
                 
                 <div className="text-gray-300 text-sm">
@@ -1043,22 +1107,41 @@ export default function PracticePage() {
                         </div>
                       )}
 
-                      {/* Solution Video */}
-                      {currentQuestion.solution_video_url && (
+                      {/* UPDATED: Solution Video with proper 16:9 aspect ratio */}
+                      {youtubeEmbedUrl && (
                         <div className="bg-gray-700/30 rounded-xl p-4">
                           <h4 className="text-gray-300 text-sm font-semibold mb-3">Video Solution:</h4>
-                          <div className="aspect-w-16 aspect-h-9 bg-black rounded-lg overflow-hidden">
+                          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}> {/* 16:9 aspect ratio */}
                             <iframe
-                              src={currentQuestion.solution_video_url.replace('watch?v=', 'embed/')}
-                              className="w-full h-64"
+                              src={youtubeEmbedUrl}
+                              className="absolute top-0 left-0 w-full h-full rounded-lg"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
+                              title="Video solution"
+                              onError={(e) => {
+                                console.error('YouTube iframe error:', e);
+                                e.target.style.display = 'none';
+                              }}
                             />
+                          </div>
+                          {/* Fallback link */}
+                          <div className="mt-2 text-center">
+                            <a 
+                              href={currentQuestion.solution_video_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 text-sm inline-flex items-center space-x-1"
+                            >
+                              <span>Watch on YouTube</span>
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                              </svg>
+                            </a>
                           </div>
                         </div>
                       )}
 
-                      {!currentQuestion.solution_blocks && !currentQuestion.solution_image_url && !currentQuestion.solution_video_url && (
+                      {!currentQuestion.solution_blocks && !currentQuestion.solution_image_url && !youtubeEmbedUrl && (
                         <div className="text-center py-8 text-gray-400">
                           <FiAlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                           <p>No solution available for this question.</p>
