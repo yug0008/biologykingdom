@@ -1,14 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../../../../hooks/useAuth';
 import { useChapterData, useMenuData } from '../../../../../../hooks/useChapterData';
+import { useQuestionData } from '../../../../../../hooks/useQuestionData';
 import { 
   ChapterOverviewSkeleton, 
   AllPYQsSkeleton, 
   TopicWiseSkeleton
 } from '../../../../../../components/Skeletons';
+import SortOverlay from '../../../../../../components/SortOverlay';
 import { 
   FiBook, 
   FiBarChart2, 
@@ -20,7 +22,10 @@ import {
   FiFolder,
   FiBookmark,
   FiAlertTriangle,
-  FiCalendar
+  FiCalendar,
+  FiFilter,
+  FiCheck,
+  FiX
 } from 'react-icons/fi';
 
 const menuItems = [
@@ -204,7 +209,7 @@ export async function getServerSideProps(context) {
 // Component for Overview Content
 const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => (
   <>
-   {/* Quick Actions */}
+    {/* Quick Actions */}
     <div className="grid mb-8 grid-cols-1 md:grid-cols-2 gap-6">
       {/* All PYQs Card */}
       <motion.div
@@ -261,9 +266,9 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
       <h2 className="text-2xl font-bold text-white mb-6 font-poppins">Your Progress</h2>
       
       {progressStats ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 rounded-xl bg-slate-700/50 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Attempted Questions */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
+          <div className="  rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-300 text-sm">Attempted</span>
               <FiCheckCircle className="w-5 h-5 text-blue-400" />
@@ -273,7 +278,7 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
           </div>
 
           {/* Correct Answers */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
+          <div className="  rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-300 text-sm">Correct</span>
               <FiCheckCircle className="w-5 h-5 text-green-400" />
@@ -283,7 +288,7 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
           </div>
 
           {/* Incorrect Answers */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
+          <div className=" rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-300 text-sm">Incorrect</span>
               <FiXCircle className="w-5 h-5 text-red-400" />
@@ -293,7 +298,7 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
           </div>
 
           {/* Accuracy */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
+          <div className="  rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-300 text-sm">Accuracy</span>
               <FiBarChart2 className="w-5 h-5 text-purple-400" />
@@ -303,7 +308,7 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
           </div>
         </div>
       ) : (
-        <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6 text-center">
+        <div className="bg-slate-700/50 rounded-xl p-6 text-center">
           <FiBarChart2 className="w-12 h-12 text-gray-500 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-gray-300 mb-2">No Progress Yet</h3>
           <p className="text-gray-400 text-sm">Start practicing to track your progress</p>
@@ -330,86 +335,171 @@ const OverviewContent = ({ progressStats, questions, topics, onMenuChange }) => 
         </div>
       )}
     </div>
-
-   
   </>
 );
 
 // Component for All PYQs Content
-const AllPYQsContent = ({ questions, exam, subject, chapter, router }) => (
-  <>
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-2xl font-bold text-white font-poppins">All PYQs</h2>
-      <div className="text-gray-400 text-sm">
-        {questions.length} questions • Sorted by date
-      </div>
-    </div>
+const AllPYQsContent = ({ 
+  questions, 
+  exam, 
+  subject, 
+  chapter, 
+  router, 
+  userAttempts,
+  sortConfig,
+  onSortChange,
+  onSortOpen 
+}) => {
+  // Sort and filter questions
+  const filteredQuestions = useMemo(() => {
+    let filtered = [...questions];
 
-    <div className="space-y-4">
-      {questions.map((question, index) => (
-        <motion.div
-          key={question.id}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: index * 0.05 }}
-          whileHover={{ scale: 1.01 }}
-          className="bg-slate-700/50 border border-slate-600 rounded-xl p-5 hover:border-purple-500/50 cursor-pointer group transition-all duration-200"
-          onClick={() => router.push(`/pyq/exams/${exam}/${subject}/${chapter}/practice?type=all&question=${index + 1}`)}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              {/* Question Header */}
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1 rounded-full">
-                  <FiCalendar className="w-3 h-3 text-purple-400" />
-                  <span className="text-purple-300 text-sm font-medium">
-                    {formatExamDate(question.year, question.month)}
-                    {question.shift && ` • ${question.shift}`}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2 bg-blue-600/20 px-3 py-1 rounded-full">
-                  <span className="text-blue-300 text-sm font-medium capitalize">
-                    {question.difficulty_category}
-                  </span>
-                </div>
-              </div>
+    // Apply filters
+    if (sortConfig.difficulty !== 'all') {
+      filtered = filtered.filter(q => q.difficulty === sortConfig.difficulty);
+    }
+    if (sortConfig.difficulty_category !== 'all') {
+      filtered = filtered.filter(q => q.difficulty_category === sortConfig.difficulty_category);
+    }
+    if (sortConfig.question_type !== 'all') {
+      filtered = filtered.filter(q => q.question_type === sortConfig.question_type);
+    }
 
-              {/* Question Preview */}
-              <div className="mb-3">
-                <p className="text-gray-200 text-sm leading-relaxed">
-                  {renderQuestionBlocks(question.question_blocks, 150)}
-                </p>
-              </div>
+    // Apply sorting
+    if (sortConfig.year === 'oldest') {
+      filtered.sort((a, b) => (a.year || 0) - (b.year || 0));
+    } else {
+      filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
+    }
 
-              {/* Question Type & Number */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 text-xs text-gray-400">
-                  <span className="capitalize">{question.question_type}</span>
-                  <span>•</span>
-                  <span>Q{index + 1}</span>
-                </div>
-                <div className="flex items-center space-x-2 text-purple-400 group-hover:text-purple-300 transition-colors">
-                  <span className="text-sm font-semibold">Solve</span>
-                  <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
+    return filtered;
+  }, [questions, sortConfig]);
+
+  const getAttemptStatus = (questionId) => {
+    const attempt = userAttempts?.find(a => a.question_id === questionId);
+    if (!attempt) return null;
+    return {
+      isAttempted: true,
+      isCorrect: attempt.is_correct,
+      attemptCount: attempt.attempt_count || 1
+    };
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-white font-poppins">All PYQs</h2>
+        <div className="flex items-center space-x-4">
+          <div className="text-gray-400 text-sm">
+            {filteredQuestions.length} questions
           </div>
-        </motion.div>
-      ))}
-    </div>
-
-    {questions.length === 0 && (
-      <div className="text-center py-12">
-        <FiList className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-300 mb-2">No PYQs Available</h3>
-        <p className="text-gray-400 text-sm">No previous year questions found for this chapter</p>
+          <button
+            onClick={onSortOpen}
+            className="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 transition-colors"
+          >
+            <FiFilter className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-300">Sort</span>
+          </button>
+        </div>
       </div>
-    )}
-  </>
-);
+
+      <div className="space-y-4">
+        {filteredQuestions.map((question, index) => {
+          const attemptStatus = getAttemptStatus(question.id);
+          
+          return (
+            <motion.div
+              key={question.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
+              whileHover={{ scale: 1.01 }}
+              className="bg-slate-700/50 border border-slate-600 rounded-xl p-5 hover:border-purple-500/50 cursor-pointer group transition-all duration-200 relative"
+              onClick={() => router.push(`/pyq/exams/${exam}/${subject}/${chapter}/practice?type=all&question=${index + 1}`)}
+            >
+              {/* Attempt Status Badge */}
+              {attemptStatus && (
+                <div className={`absolute -top-2 -right-2 p-1 rounded-full ${
+                  attemptStatus.isCorrect ? 'bg-green-500' : 'bg-red-500'
+                }`}>
+                  {attemptStatus.isCorrect ? (
+                    <FiCheck className="w-3 h-3 text-white" />
+                  ) : (
+                    <FiX className="w-3 h-3 text-white" />
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  {/* Question Header */}
+                  <div className="flex items-center space-x-3 mb-3">
+                    {/* Date Badge */}
+                    <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1 rounded-full">
+                      <FiCalendar className="w-3 h-3 text-purple-400" />
+                      <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-purple-300 font-medium">
+                        {formatExamDate(question.year, question.month)}
+                        {question.shift && ` • ${question.shift}`}
+                      </span>
+                    </div>
+
+                    {/* Difficulty Badge */}
+                    <div className="flex items-center space-x-2 bg-blue-600/20 px-3 py-1 rounded-full">
+                      <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-blue-300 font-medium capitalize">
+                        {question.difficulty_category}
+                      </span>
+                    </div>
+
+                    {/* Attempt Count */}
+                    {attemptStatus && (
+                      <div className="flex items-center space-x-2 bg-slate-600/50 px-2 py-1 rounded-full">
+                        <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-gray-300">
+                          {attemptStatus.attemptCount} attempt{attemptStatus.attemptCount > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Question Preview */}
+                  <div className="mb-3">
+                    <p className="text-gray-200 text-sm leading-relaxed">
+                      {renderQuestionBlocks(question.question_blocks, 150)}
+                    </p>
+                  </div>
+
+                  {/* Question Type & Number */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4 text-xs text-gray-400">
+                      <span className="capitalize">{question.question_type}</span>
+                      <span>•</span>
+                      <span>Q{index + 1}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-purple-400 group-hover:text-purple-300 transition-colors">
+                      <span className="text-sm font-semibold">
+                        {attemptStatus ? 'Review' : 'Solve'}
+                      </span>
+                      <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {filteredQuestions.length === 0 && (
+        <div className="text-center py-12">
+          <FiList className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">No PYQs Available</h3>
+          <p className="text-gray-400 text-sm">No questions match your current filters</p>
+        </div>
+      )}
+    </>
+  );
+};
 
 // Component for Topic-wise Content
 const TopicWiseContent = ({ topics, questions, topicQuestionCounts, exam, subject, chapter, router }) => (
@@ -473,28 +563,243 @@ const TopicWiseContent = ({ topics, questions, topicQuestionCounts, exam, subjec
   </>
 );
 
-// Components for other menu items
-const BookmarkedContent = () => (
-  <>
-    <h2 className="text-2xl font-bold text-white mb-6 font-poppins">Bookmarked Questions</h2>
-    <div className="text-center py-12">
-      <FiBookmark className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-      <h3 className="text-xl font-semibold text-gray-300 mb-2">No Bookmarked Questions</h3>
-      <p className="text-gray-400 text-sm">Questions you bookmark will appear here</p>
-    </div>
-  </>
-);
+// Component for Bookmarked Content
+const BookmarkedContent = ({ 
+  bookmarkedQuestions, 
+  exam, 
+  subject, 
+  chapter, 
+  router,
+  sortConfig,
+  onSortChange,
+  onSortOpen 
+}) => {
+  const filteredQuestions = useMemo(() => {
+    let filtered = bookmarkedQuestions.map(item => item.questions).filter(Boolean);
 
-const MistakesContent = () => (
-  <>
-    <h2 className="text-2xl font-bold text-white mb-6 font-poppins">My Mistakes</h2>
-    <div className="text-center py-12">
-      <FiAlertTriangle className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-      <h3 className="text-xl font-semibold text-gray-300 mb-2">No Mistakes Yet</h3>
-      <p className="text-gray-400 text-sm">Questions you answer incorrectly will appear here for review</p>
-    </div>
-  </>
-);
+    // Apply filters (same as AllPYQs)
+    if (sortConfig.difficulty !== 'all') {
+      filtered = filtered.filter(q => q.difficulty === sortConfig.difficulty);
+    }
+    if (sortConfig.difficulty_category !== 'all') {
+      filtered = filtered.filter(q => q.difficulty_category === sortConfig.difficulty_category);
+    }
+    if (sortConfig.question_type !== 'all') {
+      filtered = filtered.filter(q => q.question_type === sortConfig.question_type);
+    }
+
+    if (sortConfig.year === 'oldest') {
+      filtered.sort((a, b) => (a.year || 0) - (b.year || 0));
+    } else {
+      filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
+    }
+
+    return filtered;
+  }, [bookmarkedQuestions, sortConfig]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-white font-poppins">Bookmarked Questions</h2>
+        <div className="flex items-center space-x-4">
+          <div className="text-gray-400 text-sm">
+            {filteredQuestions.length} questions
+          </div>
+          <button
+            onClick={onSortOpen}
+            className="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 transition-colors"
+          >
+            <FiFilter className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-300">Sort</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {filteredQuestions.map((question, index) => (
+          <motion.div
+            key={question.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.05 }}
+            whileHover={{ scale: 1.01 }}
+            className="bg-slate-700/50 border border-slate-600 rounded-xl p-5 hover:border-yellow-500/50 cursor-pointer group transition-all duration-200"
+            onClick={() => router.push(`/pyq/exams/${exam}/${subject}/${chapter}/practice?type=bookmarked&question=${question.id}`)}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                {/* Question Header */}
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="flex items-center space-x-2 bg-yellow-600/20 px-3 py-1 rounded-full">
+                    <FiBookmark className="w-3 h-3 text-yellow-400" />
+                    <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-yellow-300 font-medium">
+                      Bookmarked
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1 rounded-full">
+                    <FiCalendar className="w-3 h-3 text-purple-400" />
+                    <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-purple-300 font-medium">
+                      {formatExamDate(question.year, question.month)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Question Preview */}
+                <div className="mb-3">
+                  <p className="text-gray-200 text-sm leading-relaxed">
+                    {renderQuestionBlocks(question.question_blocks, 150)}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 text-xs text-gray-400">
+                    <span className="capitalize">{question.question_type}</span>
+                    <span>•</span>
+                    <span className="capitalize">{question.difficulty}</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-yellow-400 group-hover:text-yellow-300 transition-colors">
+                    <span className="text-sm font-semibold">Review</span>
+                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {filteredQuestions.length === 0 && (
+        <div className="text-center py-12">
+          <FiBookmark className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">No Bookmarked Questions</h3>
+          <p className="text-gray-400 text-sm">Questions you bookmark will appear here</p>
+        </div>
+      )}
+    </>
+  );
+};
+
+// Component for Mistakes Content
+const MistakesContent = ({ 
+  incorrectQuestions, 
+  exam, 
+  subject, 
+  chapter, 
+  router,
+  sortConfig,
+  onSortChange,
+  onSortOpen 
+}) => {
+  const filteredQuestions = useMemo(() => {
+    let filtered = incorrectQuestions.map(item => item.questions).filter(Boolean);
+
+    // Apply filters (same as others)
+    if (sortConfig.difficulty !== 'all') {
+      filtered = filtered.filter(q => q.difficulty === sortConfig.difficulty);
+    }
+    if (sortConfig.difficulty_category !== 'all') {
+      filtered = filtered.filter(q => q.difficulty_category === sortConfig.difficulty_category);
+    }
+    if (sortConfig.question_type !== 'all') {
+      filtered = filtered.filter(q => q.question_type === sortConfig.question_type);
+    }
+
+    if (sortConfig.year === 'oldest') {
+      filtered.sort((a, b) => (a.year || 0) - (b.year || 0));
+    } else {
+      filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
+    }
+
+    return filtered;
+  }, [incorrectQuestions, sortConfig]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-white font-poppins">My Mistakes</h2>
+        <div className="flex items-center space-x-4">
+          <div className="text-gray-400 text-sm">
+            {filteredQuestions.length} questions
+          </div>
+          <button
+            onClick={onSortOpen}
+            className="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 transition-colors"
+          >
+            <FiFilter className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-300">Sort</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {filteredQuestions.map((question, index) => (
+          <motion.div
+            key={question.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.05 }}
+            whileHover={{ scale: 1.01 }}
+            className="bg-slate-700/50 border border-slate-600 rounded-xl p-5 hover:border-red-500/50 cursor-pointer group transition-all duration-200"
+            onClick={() => router.push(`/pyq/exams/${exam}/${subject}/${chapter}/practice?type=mistakes&question=${question.id}`)}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                {/* Question Header */}
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="flex items-center space-x-2 bg-red-600/20 px-3 py-1 rounded-full">
+                    <FiAlertTriangle className="w-3 h-3 text-red-400" />
+                    <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-red-300 font-medium">
+                      Needs Review
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 bg-purple-600/20 px-3 py-1 rounded-full">
+                    <FiCalendar className="w-3 h-3 text-purple-400" />
+                    <span className="text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-purple-300 font-medium">
+                      {formatExamDate(question.year, question.month)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Question Preview */}
+                <div className="mb-3">
+                  <p className="text-gray-200 text-sm leading-relaxed">
+                    {renderQuestionBlocks(question.question_blocks, 150)}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 text-xs text-gray-400">
+                    <span className="capitalize">{question.question_type}</span>
+                    <span>•</span>
+                    <span className="capitalize">{question.difficulty}</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-red-400 group-hover:text-red-300 transition-colors">
+                    <span className="text-sm font-semibold">Re-attempt</span>
+                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {filteredQuestions.length === 0 && (
+        <div className="text-center py-12">
+          <FiAlertTriangle className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">No Mistakes Yet</h3>
+          <p className="text-gray-400 text-sm">Questions you answer incorrectly will appear here for review</p>
+        </div>
+      )}
+    </>
+  );
+};
 
 // Main Page Component
 export default function ChapterDetailPage({ dehydratedState }) {
@@ -503,6 +808,13 @@ export default function ChapterDetailPage({ dehydratedState }) {
   const { user, loading: authLoading } = useAuth();
   
   const [activeMenu, setActiveMenu] = useState('overview');
+  const [showSortOverlay, setShowSortOverlay] = useState(false);
+  const [sortConfig, setSortConfig] = useState({
+    difficulty: 'all',
+    difficulty_category: 'all',
+    question_type: 'all',
+    year: 'newest'
+  });
 
   // Use React Query for data fetching
   const [
@@ -514,8 +826,9 @@ export default function ChapterDetailPage({ dehydratedState }) {
     userProgressQuery
   ] = useChapterData(exam, subject, chapter, user?.id);
 
-  // Use separate query for menu data to ensure clean transitions
+  // Use separate queries for menu data
   const menuDataQuery = useMenuData(activeMenu, exam, subject, chapter, user?.id);
+  const questionDataQuery = useQuestionData(activeMenu, exam, subject, chapter, user?.id);
 
   // Extract data
   const examData = examQuery.data;
@@ -524,6 +837,12 @@ export default function ChapterDetailPage({ dehydratedState }) {
   const topics = topicsQuery.data || [];
   const questions = questionsQuery.data || [];
   const userProgress = userProgressQuery.data;
+  const questionData = questionDataQuery.data;
+
+  // Auto-scroll to top when menu changes (for mobile)
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeMenu]);
 
   // Calculate derived progress stats
   const progressStats = useMemo(() => {
@@ -573,6 +892,46 @@ export default function ChapterDetailPage({ dehydratedState }) {
       .slice(0, 2);
   }, [questions]);
 
+  // Calculate question counts for current view
+  const getCurrentQuestionCount = () => {
+    switch (activeMenu) {
+      case 'all-pyqs':
+        return questions.length;
+      case 'bookmarked':
+        return questionData?.bookmarked?.length || 0;
+      case 'mistakes':
+        return questionData?.incorrect?.length || 0;
+      default:
+        return 0;
+    }
+  };
+
+  // Handle sort change
+  const handleSortChange = (key, value) => {
+    if (key === 'reset') {
+      setSortConfig({
+        difficulty: 'all',
+        difficulty_category: 'all',
+        question_type: 'all',
+        year: 'newest'
+      });
+    } else {
+      setSortConfig(prev => ({ ...prev, [key]: value }));
+    }
+  };
+
+  // Handle menu change
+  const handleMenuChange = (menuId) => {
+    setActiveMenu(menuId);
+    // Reset sort config when changing menus
+    setSortConfig({
+      difficulty: 'all',
+      difficulty_category: 'all',
+      question_type: 'all',
+      year: 'newest'
+    });
+  };
+
   // Check if any initial data is loading
   const isLoading = authLoading || 
     examQuery.isLoading || 
@@ -581,11 +940,6 @@ export default function ChapterDetailPage({ dehydratedState }) {
 
   // Check if menu data is loading
   const isMenuLoading = menuDataQuery.isLoading;
-
-  // Handle menu change
-  const handleMenuChange = (menuId) => {
-    setActiveMenu(menuId);
-  };
 
   // Show loading state for initial page load
   if (authLoading || isLoading) {
@@ -643,83 +997,82 @@ export default function ChapterDetailPage({ dehydratedState }) {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-900 to-slate-900"></div>
         
         {/* Header */}
-<div className="relative z-10 bg-slate-900 backdrop-blur-lg border-b border-slate-700">
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-    <div className="flex items-center justify-between">
+        <div className="relative z-10 bg-slate-900 backdrop-blur-lg border-b border-slate-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between">
 
-      {/* Left section */}
-      <div className="flex items-center space-x-3 min-w-0">
+              {/* Left section */}
+              <div className="flex items-center space-x-3 min-w-0">
 
-        {/* Back button */}
-        <button
-          onClick={() => router.push(`/pyq/exams/${exam}`)}
-          className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex-shrink-0"
-        >
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+                {/* Back button */}
+                <button
+                  onClick={() => router.push(`/pyq/exams/${exam}`)}
+                  className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex-shrink-0"
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-        {/* Breadcrumb + Title */}
-        <div className="min-w-0 flex-1">
-          <nav className="flex items-center space-x-1 text-[10px] sm:text-xs text-gray-400 mb-0.5">
-            <span>{examData?.name}</span>
-            <span>•</span>
-            <span>{subjectData?.name}</span>
-          </nav>
+                {/* Breadcrumb + Title */}
+                <div className="min-w-0 flex-1">
+                  <nav className="flex items-center space-x-1 text-[10px] sm:text-xs text-gray-400 mb-0.5">
+                    <span>{examData?.name}</span>
+                    <span>•</span>
+                    <span>{subjectData?.name}</span>
+                  </nav>
 
-          {/* Chapter name - responsive smallest text */}
-          <h1 className="font-bold text-white truncate font-poppins 
-                         text-sm sm:text-lg md:text-xl">
-            {chapterData.name}
-          </h1>
+                  {/* Chapter name - responsive smallest text */}
+                  <h1 className="font-bold text-white truncate font-poppins 
+                                text-sm sm:text-lg md:text-xl">
+                    {chapterData.name}
+                  </h1>
+                </div>
+              </div>
+
+              {/* Right Section (Stats + Q Count) */}
+              <div className="flex flex-col items-end space-y-1">
+
+                {/* Year Stats row */}
+                <div className="text-gray-300 text-[10px] sm:text-xs flex gap-1 overflow-x-auto no-scrollbar max-w-[160px] sm:max-w-none whitespace-nowrap">
+                  {recentYearStats.map((stat, index) => (
+                    <span key={index} className="flex items-center flex-shrink-0">
+                      <span className="text-white font-semibold">{stat.year}:</span>
+                      <span className="text-green-400 font-semibold ml-1">{stat.count} Qs</span>
+                      {index !== recentYearStats.length - 1 && (
+                        <span className="mx-1 text-gray-500">|</span>
+                      )}
+                    </span>
+                  
+                  ))}
+                </div>
+
+                {/* Questions Count */}
+                <div className="flex items-center space-x-1 bg-slate-700/50 px-2 py-1 rounded-lg">
+                  <FiBook className="w-3 h-3 text-purple-400" />
+                  <span className="text-white text-[11px] sm:text-sm font-medium">
+                    {questions.length} Questions
+                  </span>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Right Section (Stats + Q Count) */}
-      <div className="flex flex-col items-end space-y-1">
-
-        {/* Year Stats row */}
-        <div className="text-gray-300 text-[10px] sm:text-xs flex gap-1 overflow-x-auto no-scrollbar max-w-[160px] sm:max-w-none whitespace-nowrap">
-          {recentYearStats.map((stat, index) => (
-            <span key={index} className="flex items-center flex-shrink-0">
-              <span className="text-white font-semibold">{stat.year}:</span>
-              <span className="text-green-400 font-semibold ml-1">{stat.count} Qs</span>
-              {index !== recentYearStats.length - 1 && (
-                <span className="mx-1 text-gray-500">|</span>
-              )}
-            </span>
-          
-          ))}
-        </div>
-
-        {/* Questions Count */}
-        <div className="flex items-center space-x-1 bg-slate-700/50 px-2 py-1 rounded-lg">
-          <FiBook className="w-3 h-3 text-purple-400" />
-          <span className="text-white text-[11px] sm:text-sm font-medium">
-            {questions.length} Questions
-          </span>
-        </div>
-
-      </div>
-
-    </div>
-  </div>
-</div>
-
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Sidebar Navigation */}
             <div className="lg:w-64 flex-shrink-0">
-              <div className="bg-slate-800/50 backdrop-blur-lg border border-slate-700 rounded-2xl p-4 sticky top-24">
+              <div className=" backdrop-blur-lg  rounded-2xl p-4 sticky top-24">
                 {/* Navigation Menu */}
                 <nav className="space-y-1">
                   {menuItems.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleMenuChange(item.id)}
-                      className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200 text-left ${
+                      className={`w-full flex items-center space-x-3 p-4 rounded-xl transition-all duration-200 text-left ${
                         activeMenu === item.id
                           ? 'bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg'
                           : 'bg-slate-700/50 hover:bg-slate-700 border border-transparent hover:border-slate-600'
@@ -741,7 +1094,7 @@ export default function ChapterDetailPage({ dehydratedState }) {
 
             {/* Main Content */}
             <div className="flex-1 min-w-0">
-              <div className="bg-slate-800/50 backdrop-blur-lg border border-slate-700 rounded-2xl p-6 min-h-[600px]">
+              <div className=" backdrop-blur-lg  rounded-2xl p-6 min-h-[600px]">
                 <AnimatePresence mode="wait">
                   {activeMenu === 'overview' && (
                     <motion.div
@@ -776,11 +1129,15 @@ export default function ChapterDetailPage({ dehydratedState }) {
                         <AllPYQsSkeleton />
                       ) : (
                         <AllPYQsContent 
-                          questions={menuDataQuery.data?.questions || questions}
+                          questions={questions}
                           exam={exam}
                           subject={subject}
                           chapter={chapter}
                           router={router}
+                          userAttempts={questionData?.attempts}
+                          sortConfig={sortConfig}
+                          onSortChange={handleSortChange}
+                          onSortOpen={() => setShowSortOverlay(true)}
                         />
                       )}
                     </motion.div>
@@ -798,8 +1155,8 @@ export default function ChapterDetailPage({ dehydratedState }) {
                         <TopicWiseSkeleton />
                       ) : (
                         <TopicWiseContent 
-                          topics={menuDataQuery.data?.topics || topics}
-                          questions={menuDataQuery.data?.questions || questions}
+                          topics={topics}
+                          questions={questions}
                           topicQuestionCounts={topicQuestionCounts}
                           exam={exam}
                           subject={subject}
@@ -818,7 +1175,20 @@ export default function ChapterDetailPage({ dehydratedState }) {
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <BookmarkedContent />
+                      {questionDataQuery.isLoading ? (
+                        <AllPYQsSkeleton />
+                      ) : (
+                        <BookmarkedContent 
+                          bookmarkedQuestions={questionData?.bookmarked || []}
+                          exam={exam}
+                          subject={subject}
+                          chapter={chapter}
+                          router={router}
+                          sortConfig={sortConfig}
+                          onSortChange={handleSortChange}
+                          onSortOpen={() => setShowSortOverlay(true)}
+                        />
+                      )}
                     </motion.div>
                   )}
 
@@ -830,7 +1200,20 @@ export default function ChapterDetailPage({ dehydratedState }) {
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <MistakesContent />
+                      {questionDataQuery.isLoading ? (
+                        <AllPYQsSkeleton />
+                      ) : (
+                        <MistakesContent 
+                          incorrectQuestions={questionData?.incorrect || []}
+                          exam={exam}
+                          subject={subject}
+                          chapter={chapter}
+                          router={router}
+                          sortConfig={sortConfig}
+                          onSortChange={handleSortChange}
+                          onSortOpen={() => setShowSortOverlay(true)}
+                        />
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -838,6 +1221,15 @@ export default function ChapterDetailPage({ dehydratedState }) {
             </div>
           </div>
         </div>
+
+        {/* Sort Overlay */}
+        <SortOverlay
+          isOpen={showSortOverlay}
+          onClose={() => setShowSortOverlay(false)}
+          sortConfig={sortConfig}
+          onSortChange={handleSortChange}
+          questionCount={getCurrentQuestionCount()}
+        />
       </div>
     </>
   );

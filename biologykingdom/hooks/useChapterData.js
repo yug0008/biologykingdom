@@ -65,6 +65,56 @@ const fetchQuestions = async (chapterId) => {
   return data || [];
 };
 
+// Fetch user's question attempts
+const fetchUserAttempts = async (userId, chapterId) => {
+  if (!userId || !chapterId) return [];
+  
+  const { data, error } = await supabase
+    .from('user_question_attempts')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('chapter_id', chapterId);
+  
+  if (error) throw error;
+  return data || [];
+};
+
+// Fetch bookmarked questions
+const fetchBookmarkedQuestions = async (userId, chapterId) => {
+  if (!userId || !chapterId) return [];
+  
+  const { data, error } = await supabase
+    .from('user_question_attempts')
+    .select(`
+      *,
+      questions (*)
+    `)
+    .eq('user_id', userId)
+    .eq('chapter_id', chapterId)
+    .eq('is_bookmarked', true);
+  
+  if (error) throw error;
+  return data || [];
+};
+
+// Fetch incorrect questions (mistakes)
+const fetchIncorrectQuestions = async (userId, chapterId) => {
+  if (!userId || !chapterId) return [];
+  
+  const { data, error } = await supabase
+    .from('user_question_attempts')
+    .select(`
+      *,
+      questions (*)
+    `)
+    .eq('user_id', userId)
+    .eq('chapter_id', chapterId)
+    .eq('is_correct', false);
+  
+  if (error) throw error;
+  return data || [];
+};
+
 // Fetch user progress from user_question_attempts
 const fetchUserProgress = async (chapterId, userId) => {
   if (!userId) return null;
@@ -254,6 +304,28 @@ export const useMenuData = (menuId, examSlug, subjectSlug, chapterSlug, userId) 
         return { topics, questions };
       },
       enabled: !!examSlug && !!subjectSlug && !!chapterSlug
+    },
+    'bookmarked': {
+      queryKey: ['bookmarked', examSlug, subjectSlug, chapterSlug, userId],
+      queryFn: async () => {
+        const examData = await fetchExamData(examSlug);
+        const subjectData = await fetchSubjectData(subjectSlug, examData.id);
+        const chapterData = await fetchChapterData(chapterSlug, subjectData.id);
+        const bookmarked = await fetchBookmarkedQuestions(userId, chapterData.id);
+        return { bookmarked };
+      },
+      enabled: !!examSlug && !!subjectSlug && !!chapterSlug && !!userId
+    },
+    'mistakes': {
+      queryKey: ['mistakes', examSlug, subjectSlug, chapterSlug, userId],
+      queryFn: async () => {
+        const examData = await fetchExamData(examSlug);
+        const subjectData = await fetchSubjectData(subjectSlug, examData.id);
+        const chapterData = await fetchChapterData(chapterSlug, subjectData.id);
+        const incorrect = await fetchIncorrectQuestions(userId, chapterData.id);
+        return { incorrect };
+      },
+      enabled: !!examSlug && !!subjectSlug && !!chapterSlug && !!userId
     }
   };
 
@@ -264,4 +336,30 @@ export const useMenuData = (menuId, examSlug, subjectSlug, chapterSlug, userId) 
   };
 
   return useQuery(config);
+};
+
+// Hook for question data (attempts, bookmarked, incorrect)
+export const useQuestionData = (activeMenu, examSlug, subjectSlug, chapterSlug, userId) => {
+  return useQuery({
+    queryKey: ['question-data', activeMenu, examSlug, subjectSlug, chapterSlug, userId],
+    queryFn: async () => {
+      if (!examSlug || !subjectSlug || !chapterSlug || !userId) {
+        return { attempts: [], bookmarked: [], incorrect: [] };
+      }
+
+      const examData = await fetchExamData(examSlug);
+      const subjectData = await fetchSubjectData(subjectSlug, examData.id);
+      const chapterData = await fetchChapterData(chapterSlug, subjectData.id);
+      const chapterId = chapterData.id;
+
+      const [attempts, bookmarked, incorrect] = await Promise.all([
+        fetchUserAttempts(userId, chapterId),
+        fetchBookmarkedQuestions(userId, chapterId),
+        fetchIncorrectQuestions(userId, chapterId)
+      ]);
+
+      return { attempts, bookmarked, incorrect };
+    },
+    enabled: !!examSlug && !!subjectSlug && !!chapterSlug && !!userId,
+  });
 };
