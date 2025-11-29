@@ -8,7 +8,7 @@ import { queryClient } from "../lib/react-query";
 export default function App({ Component, pageProps, router }) {
   // Pages that SHOULD NOT use layout
   const noLayoutPages = ["/login", "/signup"];
-  const noLayoutPrefixes = ["/pyq/exams/"];
+  const noLayoutPrefixes = ["/pyq/exams/","/cards/"];
 
   const isNoLayoutPage =
     noLayoutPages.includes(router.pathname) ||

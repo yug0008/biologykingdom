@@ -140,7 +140,7 @@ const TopicGrid = ({ topics, chapter }) => {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: index * 0.05 }}
             whileHover={{ scale: 1.05 }}
-            onClick={() => router.push(`/formulacards/${chapter}/${topic.slug}`)}
+            onClick={() => router.push(`/cards/${chapter}/${topic.slug}`)}
             className="rounded-2xl overflow-hidden cursor-pointer group relative"
             style={{
               boxShadow: '0 10px 40px rgba(139, 92, 246, 0.15)'
@@ -177,7 +177,6 @@ const TopicGrid = ({ topics, chapter }) => {
   );
 };
 
-
 // Main Page Component
 export default function FormulaCardsChapterPage() {
   const router = useRouter();
@@ -188,10 +187,22 @@ export default function FormulaCardsChapterPage() {
   const [stats, setStats] = useState({});
   const [totalCards, setTotalCards] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState(null);
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
 
   // Fetch chapter data and topics with formula cards
   useEffect(() => {
-    if (!chapter) return;
+    if (!chapter || !userId) return;
 
     const fetchData = async () => {
       try {
@@ -245,14 +256,78 @@ export default function FormulaCardsChapterPage() {
         const total = topicsWithCards.reduce((sum, topic) => sum + topic.card_count, 0);
         setTotalCards(total);
 
-        // TODO: Fetch user progress stats when user system is implemented
-        // For now, using placeholder stats
-        setStats({
-          need_revision: 0,
-          bookmarked: 0,
-          not_seen: total,
-          memorized: 0
-        });
+        // Fetch user progress stats from user_flashcard_progress table
+        if (userId) {
+          // Get all flashcard IDs for this chapter
+          const allFlashcardIds = [];
+          for (const topic of topicsWithCards) {
+            const { data: cards } = await supabase
+              .from('formula_cards')
+              .select('id')
+              .eq('topic_id', topic.id);
+            
+            if (cards) {
+              allFlashcardIds.push(...cards.map(card => card.id));
+            }
+          }
+
+          if (allFlashcardIds.length > 0) {
+            // Fetch user progress for all flashcards in this chapter
+            const { data: userProgress, error: progressError } = await supabase
+              .from('user_flashcard_progress')
+              .select('*')
+              .in('flashcard_id', allFlashcardIds)
+              .eq('user_id', userId);
+
+            if (progressError) throw progressError;
+
+            // Calculate stats
+            const progressStats = {
+              need_revision: 0,
+              bookmarked: 0,
+              not_seen: 0,
+              memorized: 0
+            };
+
+            // Count cards with progress data
+            const cardsWithProgress = userProgress || [];
+            
+            cardsWithProgress.forEach(progress => {
+              if (progress.is_bookmarked) {
+                progressStats.bookmarked++;
+              }
+              
+              switch (progress.status) {
+                case 'need_revision':
+                  progressStats.need_revision++;
+                  break;
+                case 'memorized':
+                  progressStats.memorized++;
+                  break;
+                case 'new':
+                  progressStats.not_seen++;
+                  break;
+                case 'learning':
+                  // Learning cards are considered as "not seen" for the purpose of these stats
+                  progressStats.not_seen++;
+                  break;
+              }
+            });
+
+            // Calculate not_seen as total cards minus cards that have any progress status
+            progressStats.not_seen = total - cardsWithProgress.length;
+
+            setStats(progressStats);
+          } else {
+            // No flashcards in this chapter
+            setStats({
+              need_revision: 0,
+              bookmarked: 0,
+              not_seen: total,
+              memorized: 0
+            });
+          }
+        }
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -262,13 +337,11 @@ export default function FormulaCardsChapterPage() {
     };
 
     fetchData();
-  }, [chapter]);
+  }, [chapter, userId]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-              
-
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
       </div>
     );
