@@ -5,6 +5,8 @@ import { Play, ArrowRight, Star, Users, CheckCircle, Quote, Video, BookOpen, Cal
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { FiBook, FiBarChart2, FiFileText, FiUsers, FiArrowRight } from "react-icons/fi";
+import { useRouter } from 'next/router';
+
 // Recharts components for analytics
 import {
   LineChart,
@@ -1292,7 +1294,417 @@ const DailyGoalSection = () => {
     </section>
   );
 };
+// Formula Cards Section with Tabs
+const FormulaCardsSection = () => {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('physics');
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  // Unique Thumbnail Design Component
+  const ThumbnailDesign = ({ designIndex, className }) => {
+    const designs = [
+      // Design 1: Geometric Pattern
+      <div key="1" className={`absolute inset-0 opacity-20 ${className}`}>
+        <div className="absolute top-2 left-2 w-8 h-8 border-2 border-white rounded-full"></div>
+        <div className="absolute top-2 right-2 w-6 h-6 border border-white rotate-45"></div>
+        <div className="absolute bottom-4 left-4 w-10 h-1 bg-white rounded-full"></div>
+        <div className="absolute bottom-8 right-4 w-4 h-4 bg-white rounded-sm rotate-12"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white rounded-lg rotate-45"></div>
+      </div>,
+      
+      // Design 2: Circuit Board
+      <div key="2" className={`absolute inset-0 opacity-15 ${className}`}>
+        <div className="absolute top-3 left-3 w-16 h-1 bg-white rounded-full"></div>
+        <div className="absolute top-3 left-3 w-1 h-12 bg-white rounded-full"></div>
+        <div className="absolute top-8 right-4 w-12 h-1 bg-white rounded-full"></div>
+        <div className="absolute bottom-6 left-6 w-1 h-8 bg-white rounded-full"></div>
+        <div className="absolute bottom-4 right-6 w-8 h-1 bg-white rounded-full"></div>
+        <div className="absolute top-1/2 right-8 w-1 h-10 bg-white rounded-full"></div>
+        <div className="absolute top-10 left-8 w-6 h-6 border border-white rounded-full"></div>
+      </div>,
+      
+      // Design 3: Molecular Structure
+      <div key="3" className={`absolute inset-0 opacity-25 ${className}`}>
+        <div className="absolute top-6 left-6 w-3 h-3 bg-white rounded-full"></div>
+        <div className="absolute top-10 right-8 w-3 h-3 bg-white rounded-full"></div>
+        <div className="absolute bottom-8 left-8 w-3 h-3 bg-white rounded-full"></div>
+        <div className="absolute bottom-6 right-6 w-3 h-3 bg-white rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full"></div>
+        <div className="absolute top-6 left-6 w-16 h-0.5 bg-white transform rotate-45 origin-left"></div>
+        <div className="absolute top-6 left-6 w-16 h-0.5 bg-white transform -rotate-45 origin-left"></div>
+      </div>,
+      
+      // Design 4: Wave Pattern
+      <div key="4" className={`absolute inset-0 opacity-20 ${className}`}>
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <path
+            d="M0,50 Q25,30 50,50 T100,50"
+            stroke="white"
+            strokeWidth="1"
+            fill="none"
+            className="opacity-40"
+          />
+          <path
+            d="M0,60 Q25,40 50,60 T100,60"
+            stroke="white"
+            strokeWidth="1"
+            fill="none"
+            className="opacity-30"
+          />
+          <path
+            d="M0,70 Q25,50 50,70 T100,70"
+            stroke="white"
+            strokeWidth="1"
+            fill="none"
+            className="opacity-20"
+          />
+        </svg>
+      </div>,
+      
+      // Design 5: Constellation
+      <div key="5" className={`absolute inset-0 opacity-30 ${className}`}>
+        {[...Array(12)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute bg-white rounded-full"
+            style={{
+              width: `${Math.random() * 3 + 1}px`,
+              height: `${Math.random() * 3 + 1}px`,
+              top: `${Math.random() * 80 + 10}%`,
+              left: `${Math.random() * 80 + 10}%`,
+            }}
+          />
+        ))}
+        <div className="absolute top-1/4 left-1/4 w-0.5 h-6 bg-white transform -rotate-45"></div>
+        <div className="absolute bottom-1/3 right-1/3 w-0.5 h-4 bg-white transform rotate-30"></div>
+      </div>,
+      
+      // Design 6: Binary Code
+      <div key="6" className={`absolute inset-0 opacity-15 ${className}`}>
+        <div className="font-mono text-white text-xs absolute top-3 left-3">1010</div>
+        <div className="font-mono text-white text-xs absolute top-8 right-4">1101</div>
+        <div className="font-mono text-white text-xs absolute bottom-6 left-5">0110</div>
+        <div className="font-mono text-white text-xs absolute bottom-4 right-3">1001</div>
+        <div className="font-mono text-white text-xs absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">1110</div>
+        <div className="absolute top-12 left-8 w-8 h-0.5 bg-white"></div>
+        <div className="absolute bottom-12 right-8 w-6 h-0.5 bg-white"></div>
+      </div>,
+      
+      // Design 7: Radar Sweep
+      <div key="7" className={`absolute inset-0 opacity-20 ${className}`}>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 border border-white rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-white rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-8 bg-white origin-bottom rotate-45"></div>
+      </div>,
+      
+      // Design 8: Chemical Formula
+      <div key="8" className={`absolute inset-0 opacity-25 ${className}`}>
+        <div className="absolute top-4 left-4 text-white text-sm font-bold">H₂O</div>
+        <div className="absolute top-10 right-6 text-white text-sm font-bold">CO₂</div>
+        <div className="absolute bottom-8 left-6 text-white text-sm font-bold">NaCl</div>
+        <div className="absolute bottom-4 right-4 text-white text-sm font-bold">CH₄</div>
+        <div className="absolute top-1/2 left-1/3 text-white text-xs">→</div>
+        <div className="absolute top-1/2 right-1/3 text-white text-xs">+</div>
+        <div className="absolute top-3/4 left-1/2 transform -translate-x-1/2 text-white text-xs">Δ</div>
+      </div>
+    ];
+
+    return designs[designIndex % designs.length];
+  };
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch subjects from Supabase
+        const { data: subjectsData, error } = await supabase
+          .from('subjects')
+          .select('*')
+          .order('order');
+
+        if (error) throw error;
+
+        // For each subject, fetch recent chapters and calculate total cards
+        const subjectsWithData = await Promise.all(
+          (subjectsData || []).map(async (subject) => {
+            // Fetch up to 5 recent chapters for this subject
+            const { data: chaptersData, error: chaptersError } = await supabase
+              .from('chapters')
+              .select('*')
+              .eq('subject_id', subject.id)
+              .order('order')
+              .limit(5);
+
+            if (chaptersError) throw chaptersError;
+
+            // For each chapter, count the number of formula cards
+            const chaptersWithCounts = await Promise.all(
+              (chaptersData || []).map(async (chapter) => {
+                const { count, error: countError } = await supabase
+                  .from('formula_cards')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('chapter_id', chapter.id);
+
+                if (countError) throw countError;
+
+                return {
+                  ...chapter,
+                  card_count: count || 0
+                };
+              })
+            );
+
+            // Calculate total cards for this subject
+            let totalCardCount = 0;
+            for (const chapter of chaptersWithCounts) {
+              totalCardCount += chapter.card_count;
+            }
+
+            return {
+              ...subject,
+              chapters: chaptersWithCounts,
+              totalCards: totalCardCount
+            };
+          })
+        );
+
+        setSubjects(subjectsWithData);
+      } catch (error) {
+        console.error('Error fetching formula cards data:', error);
+        // Fallback to demo data
+        setSubjects(getDemoSubjectsData());
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSubjects();
+  }, []);
+
+  const getDemoSubjectsData = () => [
+    {
+      id: '1',
+      name: 'Physics',
+      slug: 'physics',
+      chapters: [
+        { id: '1', name: 'Current Electricity', card_count: 39, slug: 'current-electricity' },
+        { id: '2', name: 'Semiconductors', card_count: 51, slug: 'semiconductors' },
+        { id: '3', name: 'Alternating Current', card_count: 11, slug: 'alternating-current' },
+        { id: '4', name: 'Rotational Motion', card_count: 33, slug: 'rotational-motion' },
+        { id: '5', name: 'Oscillations', card_count: 33, slug: 'oscillations' }
+      ],
+      totalCards: 167
+    },
+    {
+      id: '2',
+      name: 'Chemistry',
+      slug: 'chemistry',
+      chapters: [
+        { id: '6', name: 'Chemical Bonding', card_count: 28, slug: 'chemical-bonding' },
+        { id: '7', name: 'Organic Chemistry', card_count: 45, slug: 'organic-chemistry' },
+        { id: '8', name: 'Thermodynamics', card_count: 22, slug: 'thermodynamics' },
+        { id: '9', name: 'Electrochemistry', card_count: 19, slug: 'electrochemistry' },
+        { id: '10', name: 'Coordination Compounds', card_count: 31, slug: 'coordination-compounds' }
+      ],
+      totalCards: 145
+    },
+    {
+      id: '3',
+      name: 'Mathematics',
+      slug: 'mathematics',
+      chapters: [
+        { id: '11', name: 'Calculus', card_count: 67, slug: 'calculus' },
+        { id: '12', name: 'Algebra', card_count: 42, slug: 'algebra' },
+        { id: '13', name: 'Geometry', card_count: 38, slug: 'geometry' },
+        { id: '14', name: 'Statistics', card_count: 25, slug: 'statistics' },
+        { id: '15', name: 'Probability', card_count: 29, slug: 'probability' }
+      ],
+      totalCards: 201
+    }
+  ];
+
+  // Card background colors
+  const cardColors = [
+    'bg-gradient-to-br from-blue-400 to-blue-600',
+    'bg-gradient-to-br from-green-400 to-green-600',
+    'bg-gradient-to-br from-red-400 to-red-600',
+    'bg-gradient-to-br from-purple-400 to-purple-600',
+    'bg-gradient-to-br from-yellow-400 to-yellow-600',
+    'bg-gradient-to-br from-indigo-400 to-indigo-600',
+    'bg-gradient-to-br from-pink-400 to-pink-600',
+    'bg-gradient-to-br from-teal-400 to-teal-600'
+  ];
+
+  const activeSubject = subjects.find(subject => 
+    subject.slug.toLowerCase() === activeTab.toLowerCase()
+  ) || subjects[0];
+
+  if (loading) {
+    return (
+      <section className="py-16 bg-gradient-to-b from-slate-900 to-slate-800">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-slate-700 rounded w-1/3 mb-6"></div>
+            <div className="h-12 bg-slate-700 rounded-lg mb-8"></div>
+            <div className="flex space-x-4">
+              {[1, 2, 3, 4, 5].map((card) => (
+                <div key={card} className="w-32 h-40 bg-slate-700 rounded-xl"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="py-4 bg-gradient-to-b from-slate-900 to-slate-800">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* Section Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mb-8"
+        >
+          <h2 className="text-1xl sm:text-2xl font-bold text-white mb-2">
+            Formula Cards
+          </h2>
+          <p className="text-gray-400">
+            Master important formulas with interactive flashcards
+          </p>
+        </motion.div>
+
+       {/* Tabs Navigation */}
+<div className="mb-4">
+  <div className="flex space-x-2 overflow-x-auto scrollbar-hide rounded-xl p-1 border-slate-700/50">
+    {subjects.map((subject, index) => (
+      <button
+        key={subject.id}
+        onClick={() => setActiveTab(subject.slug)}
+        className={`flex-shrink-0 px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm sm:text-base ${
+          activeTab === subject.slug
+            ? 'bg-slate-700 text-white shadow-lg'
+            : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
+        }`}
+      >
+        {subject.name}
+      </button>
+    ))}
+  </div>
+</div>
+
+
+        {/* Subject Content */}
+        {activeSubject && (
+          <motion.div
+            key={activeSubject.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gray-800/40 rounded-2xl border border-gray-700/40 px-5 py-6"
+          >
+            {/* Subject Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+              <div className="flex items-center space-x-3 mb-4 sm:mb-0">
+                <div className="w-7 h-7 rounded-lg bg-purple-600/20 flex items-center justify-center">
+                  <FiBook className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                 <h3 className="text-xs md:text-lg font-bold text-white">
+  {activeSubject.name}
+</h3>
+
+
+                  <p className="text-gray-400 text-sm">
+                    {activeSubject.totalCards} formula cards
+                  </p>
+                </div>
+              </div>
+
+              {/* View All Button */}
+              <button
+                onClick={() => router.push(`/flashcards/${activeSubject.slug}`)}
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center space-x-1 transition-colors self-start sm:self-auto"
+              >
+                <span>VIEW ALL</span>
+                <FiArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            
+
+            {/* Chapter Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+              {activeSubject.chapters.map((chapter, chapterIndex) => (
+                <motion.div
+                  key={chapter.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: chapterIndex * 0.1 }}
+                  whileHover={{ scale: 1.05 }}
+                  onClick={() => router.push(`/formulacards/${chapter.slug}`)}
+                  className="cursor-pointer group"
+                >
+                  <div 
+                    className={`aspect-[4/5] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden ${cardColors[chapterIndex % cardColors.length]} shadow-lg`}
+                  >
+                    {/* Unique Thumbnail Design */}
+                    <ThumbnailDesign designIndex={chapterIndex} />
+
+                    {/* Number Icon */}
+                    <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 relative z-10">
+                      <span className="text-white font-bold text-sm">
+                        {chapter.card_count}
+                      </span>
+                    </div>
+
+                    {/* Chapter Title */}
+                    <div className="relative z-10">
+                      <h5 className="text-white font-semibold text-sm leading-tight">
+                        {chapter.name}
+                      </h5>
+                    </div>
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Empty State for Chapters */}
+            {(!activeSubject.chapters || activeSubject.chapters.length === 0) && (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <FiBook className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-400">No chapters available yet</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Empty State for Subjects */}
+        {subjects.length === 0 && (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 bg-gray-800/40 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700/40">
+              <FiBook className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-300 mb-2">
+              No Formula Cards Available
+            </h3>
+            <p className="text-gray-400 max-w-md mx-auto">
+              Formula cards will be available soon. Check back later to start mastering formulas.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
 // Features Section with Dark Background
 const Features = () => {
   const features = [
@@ -1655,6 +2067,8 @@ export default function Home() {
     <div className="min-h-screen bg-white">
       <Subheader />
       <DailyGoalSection />
+      {/* New Formula Cards Section */}
+      
 <section className="w-full  bg-gradient-to-b from-slate-900 to-slate-800 relative text-gray-200 py-10 px-4 sm:px-8">
   
 
@@ -1684,7 +2098,7 @@ export default function Home() {
     ))}
   </div>
 </section>
-
+<FormulaCardsSection />
       <Features />
       <Banner />
       
