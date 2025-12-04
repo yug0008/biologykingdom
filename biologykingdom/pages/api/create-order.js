@@ -8,16 +8,16 @@ export default async function handler(req, res) {
 
   try {
     console.log('Environment check:', {
-      keyId: process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing',
+      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ? 'Present' : 'Missing',
       keySecret: process.env.RAZORPAY_KEY_SECRET ? 'Present' : 'Missing',
     });
 
     // Debug: Log environment variables (without revealing full values)
-    const keyIdPrefix = process.env.RAZORPAY_KEY_ID 
-      ? `${process.env.RAZORPAY_KEY_ID.substring(0, 8)}...` 
+    const keyIdPrefix = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID 
+      ? `${process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID.substring(0, 8)}...` 
       : 'Missing';
     
-    console.log('RAZORPAY_KEY_ID starts with:', keyIdPrefix);
+    console.log('NEXT_PUBLIC_RAZORPAY_KEY_ID starts with:', keyIdPrefix);
     console.log('NODE_ENV:', process.env.NODE_ENV);
     console.log('VERCEL:', process.env.VERCEL);
 
