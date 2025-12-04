@@ -1,12 +1,14 @@
+// pages/api/verify-payment.js
 import { supabase } from '../../lib/supabase';
-// crypto is now a built-in Node.js module, no need to install
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let paymentId = null;
+  console.log('=== Payment Verification Started ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
 
   try {
     const {
@@ -16,253 +18,285 @@ export default async function handler(req, res) {
       plan_id
     } = req.body;
 
-    // Validate input
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature || !plan_id) {
-      return res.status(400).json({ 
-        error: 'Missing required payment parameters' 
-      });
-    }
-
     // Get user from auth token
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    console.log('Token present:', !!token);
+    
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
+      console.log('Auth error:', authError);
+      console.log('User:', user);
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Verify payment signature using built-in crypto module
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = require('crypto')
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest('hex');
+    console.log('User authenticated:', user.id);
 
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ error: 'Invalid payment signature' });
-    }
-
-    // Find the payment record
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('provider_order_id', razorpay_order_id)
-      .eq('user_id', user.id)
-      .single();
-
-    if (paymentError || !payment) {
-      return res.status(404).json({ error: 'Payment record not found' });
-    }
-
-    paymentId = payment.id;
-
-    // Check if already processed
-    if (payment.status === 'paid') {
-      return res.status(400).json({ error: 'Payment already processed' });
-    }
-
-    // Get plan details
+    // 1. Get plan details first
+    console.log('Fetching plan:', plan_id);
     const { data: plan, error: planError } = await supabase
       .from('plans')
-      .select('*')
+      .select('*, exams(*)')
       .eq('id', plan_id)
       .single();
 
-    if (planError || !plan) {
+    if (planError) {
+      console.log('Plan error:', planError);
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    // Update payment status to paid
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({
-        status: 'paid',
-        provider_payment_id: razorpay_payment_id,
-        provider_signature: razorpay_signature,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', payment.id);
+    console.log('Plan found:', plan.name);
+    console.log('Exam ID:', plan.exam_id);
 
-    if (updateError) {
-      throw new Error('Failed to update payment status');
+    // 2. Verify Razorpay signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest('hex');
+    
+    const isSignatureValid = expectedSignature === razorpay_signature;
+    
+    if (!isSignatureValid) {
+      console.error('Invalid signature!');
+      return res.status(400).json({ 
+        error: 'Invalid payment signature',
+        message: 'Payment verification failed'
+      });
     }
 
-    // Calculate subscription expiry
-    let expiresAt = new Date();
-    if (plan.billing_interval === 'monthly') {
-      expiresAt.setMonth(expiresAt.getMonth() + 1);
-    } else if (plan.billing_interval === 'yearly') {
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    } else if (plan.billing_interval === 'once' && plan.duration_days) {
+    console.log('Signature verified successfully');
+
+    // 3. Check if payment already exists
+    console.log('Checking existing payment for order:', razorpay_order_id);
+    const { data: existingPayment, error: checkError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('provider_order_id', razorpay_order_id)
+      .maybeSingle();  // Use maybeSingle instead of single to handle no results
+
+    console.log('Existing payment check result:', { 
+      exists: !!existingPayment, 
+      error: checkError?.message 
+    });
+
+    if (existingPayment) {
+      console.log('Payment already exists:', existingPayment.id);
+      
+      // If payment is already marked as paid, just return success
+      if (existingPayment.status === 'paid') {
+        console.log('Payment already marked as paid');
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Payment already verified',
+          payment: existingPayment
+        });
+      }
+      
+      // If payment exists but not paid, update it
+      if (existingPayment.status !== 'paid') {
+        const { data: updatedPayment, error: updateError } = await supabase
+          .from('payments')
+          .update({
+            status: 'paid',
+            provider_payment_id: razorpay_payment_id,
+            provider_signature: razorpay_signature,
+            updated_at: new Date().toISOString(),
+            raw_response: req.body
+          })
+          .eq('id', existingPayment.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating payment:', updateError);
+          throw updateError;
+        }
+        
+        console.log('Payment updated to paid status:', updatedPayment.id);
+        
+        // Continue to subscription creation
+        return await createSubscription(res, user.id, plan, updatedPayment);
+      }
+    }
+
+    // 4. Create new payment record
+    const paymentData = {
+      user_id: user.id,
+      plan_id: plan_id,
+      exam_id: plan.exam_id,
+      amount_in_paise: plan.price_in_paise,
+      currency: 'INR',
+      status: 'paid',
+      provider: 'razorpay',
+      provider_order_id: razorpay_order_id,
+      provider_payment_id: razorpay_payment_id,
+      provider_signature: razorpay_signature,
+      idempotency_key: `payment_${razorpay_payment_id}`,
+      net_amount_in_paise: plan.price_in_paise,
+      raw_response: req.body,
+      metadata: {
+        plan_name: plan.name,
+        billing_interval: plan.billing_interval,
+        duration_days: plan.duration_days,
+        verified_at: new Date().toISOString(),
+        exam_name: plan.exams?.name || 'Unknown'
+      }
+    };
+
+    console.log('Creating payment record:', {
+      ...paymentData,
+      raw_response: '...' // Don't log full raw_response
+    });
+
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .insert([paymentData])
+      .select()
+      .single();
+
+    if (paymentError) {
+      console.error('Payment insertion error:', paymentError);
+      throw paymentError;
+    }
+
+    console.log('Payment record created:', payment.id);
+
+    // 5. Create subscription
+    return await createSubscription(res, user.id, plan, payment);
+
+  } catch (error) {
+    console.error('=== Payment Verification Failed ===');
+    console.error('Error:', error);
+    console.error('Error stack:', error.stack);
+    
+    return res.status(500).json({ 
+      success: false,
+      error: error.message || 'Payment verification failed',
+      code: error.code,
+      message: 'Please contact support if this persists'
+    });
+  }
+}
+
+// Helper function to create/update subscription
+async function createSubscription(res, userId, plan, payment) {
+  try {
+    const expiresAt = new Date();
+    
+    if (plan.duration_days) {
       expiresAt.setDate(expiresAt.getDate() + plan.duration_days);
     } else {
-      // Lifetime access
-      expiresAt = null;
+      // Default to 1 year if no duration specified
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
     }
 
-    // Create or update user subscription
+    console.log('Subscription expires at:', expiresAt);
+
+    // Check for existing subscription
     const { data: existingSubscription, error: subCheckError } = await supabase
       .from('user_subscriptions')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('plan_id', plan_id)
-      .single();
+      .select('*')
+      .eq('user_id', userId)
+      .eq('plan_id', plan.id)
+      .maybeSingle();
+
+    console.log('Existing subscription check:', { 
+      exists: !!existingSubscription, 
+      error: subCheckError?.message 
+    });
 
     let subscription;
     
-    if (existingSubscription) {
+    if (existingSubscription && !subCheckError) {
       // Update existing subscription
-      const { data: updatedSub, error: updateSubError } = await supabase
+      console.log('Updating existing subscription:', existingSubscription.id);
+      const { data: updatedSubscription, error: updateError } = await supabase
         .from('user_subscriptions')
         .update({
           status: 'active',
-          started_at: new Date().toISOString(),
-          expires_at: expiresAt ? expiresAt.toISOString() : null,
-          auto_renew: plan.billing_interval !== 'once',
-          razorpay_subscription_id: razorpay_payment_id,
+          expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
+          payment_id: payment?.id || null,
           metadata: {
-            ...payment.metadata,
-            last_payment_id: payment.id,
-            payment_method: 'razorpay'
+            ...existingSubscription.metadata,
+            renewed_at: new Date().toISOString(),
+            payment_id: payment?.id
           }
         })
         .eq('id', existingSubscription.id)
         .select()
         .single();
 
-      if (updateSubError) throw updateSubError;
-      subscription = updatedSub;
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+      subscription = updatedSubscription;
+      console.log('Subscription updated:', subscription.id);
     } else {
       // Create new subscription
-      const { data: newSub, error: createSubError } = await supabase
-        .from('user_subscriptions')
-        .insert({
-          user_id: user.id,
-          plan_id: plan_id,
+      console.log('Creating new subscription...');
+      const subscriptionData = {
+        user_id: userId,
+        plan_id: plan.id,
+        status: 'active',
+        starts_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+        payment_id: payment?.id || null,
+        metadata: {
+          purchased_at: new Date().toISOString(),
+          razorpay_payment_id: payment?.provider_payment_id,
+          razorpay_order_id: payment?.provider_order_id,
           exam_id: plan.exam_id,
-          status: 'active',
-          started_at: new Date().toISOString(),
-          expires_at: expiresAt ? expiresAt.toISOString() : null,
-          auto_renew: plan.billing_interval !== 'once',
-          razorpay_subscription_id: razorpay_payment_id,
-          metadata: {
-            payment_id: payment.id,
-            payment_method: 'razorpay',
-            initial_payment_amount: payment.amount_in_paise
-          }
-        })
+          exam_name: plan.exams?.name
+        }
+      };
+
+      console.log('Subscription data:', subscriptionData);
+
+      const { data: newSubscription, error: createError } = await supabase
+        .from('user_subscriptions')
+        .insert([subscriptionData])
         .select()
         .single();
 
-      if (createSubError) throw createSubError;
-      subscription = newSub;
-    }
-
-    // Create enrollment if exam_id exists
-    if (plan.exam_id) {
-      const { error: enrollmentError } = await supabase
-        .from('enrollments')
-        .upsert({
-          user_id: user.id,
-          exam_id: plan.exam_id,
-          source: 'subscription',
-          source_id: subscription.id,
-          valid_from: new Date().toISOString(),
-          valid_until: expiresAt ? expiresAt.toISOString() : null,
-          active: true
-        }, {
-          onConflict: 'user_id,exam_id,source,source_id'
-        });
-
-      if (enrollmentError) {
-        console.error('Error creating enrollment:', enrollmentError);
-        // Don't fail the whole process if enrollment fails
+      if (createError) {
+        console.error('Subscription creation error:', createError);
+        throw createError;
       }
+      subscription = newSubscription;
+      console.log('Subscription created:', subscription.id);
     }
 
-    // Create invoice
-    const invoiceNumber = `INV-${Date.now()}-${user.id.slice(0, 8)}`;
-    const { error: invoiceError } = await supabase
-      .from('invoices')
-      .insert({
-        payment_id: payment.id,
-        invoice_number: invoiceNumber,
-        issued_at: new Date().toISOString(),
-        metadata: {
-          plan_name: plan.name,
-          billing_interval: plan.billing_interval,
-          user_email: user.email
+    // 6. Optional: Update user profile or send email
+    try {
+      // Update user metadata with premium status
+      await supabase.auth.updateUser({
+        data: {
+          is_premium: true,
+          premium_since: new Date().toISOString(),
+          active_plan: plan.name
         }
       });
-
-    if (invoiceError) {
-      console.error('Error creating invoice:', invoiceError);
-      // Don't fail the whole process if invoice creation fails
+    } catch (userUpdateError) {
+      console.log('User update non-critical error:', userUpdateError.message);
+      // Continue even if user update fails
     }
 
-    // Log successful payment event
-    await supabase
-      .from('payment_events')
-      .insert({
-        payment_id: payment.id,
-        event_type: 'payment_verified',
-        payload: {
-          razorpay_payment_id,
-          razorpay_order_id,
-          plan_id,
-          subscription_id: subscription.id,
-          amount: payment.amount_in_paise
-        }
-      });
-
-    res.status(200).json({
+    console.log('=== Payment Verification Successful ===');
+    
+    // 7. Send success response
+    return res.status(200).json({
       success: true,
-      payment_id: payment.id,
-      subscription_id: subscription.id,
-      invoice_number: invoiceNumber,
-      expires_at: subscription.expires_at,
-      message: 'Payment verified and subscription activated successfully'
+      message: 'Payment verified and subscription activated',
+      payment: payment,
+      subscription,
+      redirectUrl: '/dashboard'
     });
 
   } catch (error) {
-    console.error('Error verifying payment:', error);
-
-    // Update payment status to failed if we have the payment ID
-    if (paymentId) {
-      try {
-        await supabase
-          .from('payments')
-          .update({
-            status: 'failed',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', paymentId);
-
-        // Log failure event
-        await supabase
-          .from('payment_events')
-          .insert({
-            payment_id: paymentId,
-            event_type: 'payment_verification_failed',
-            payload: {
-              error: error.message,
-              timestamp: new Date().toISOString()
-            }
-          });
-      } catch (dbError) {
-        console.error('Error updating failed payment status:', dbError);
-      }
-    }
-
-    res.status(500).json({ 
-      error: 'Payment verification failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Subscription creation failed:', error);
+    throw error;
   }
 }

@@ -1,3 +1,4 @@
+// /pages/api/create-order.js
 import { supabase } from '../../lib/supabase';
 
 export default async function handler(req, res) {
@@ -6,6 +7,29 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Environment check:', {
+      keyId: process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing',
+      keySecret: process.env.RAZORPAY_KEY_SECRET ? 'Present' : 'Missing',
+    });
+
+    // Debug: Log environment variables (without revealing full values)
+    const keyIdPrefix = process.env.RAZORPAY_KEY_ID 
+      ? `${process.env.RAZORPAY_KEY_ID.substring(0, 8)}...` 
+      : 'Missing';
+    
+    console.log('RAZORPAY_KEY_ID starts with:', keyIdPrefix);
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('VERCEL:', process.env.VERCEL);
+
+    // Validate environment variables FIRST
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      console.error('Missing Razorpay credentials in environment variables');
+      return res.status(500).json({ 
+        error: 'Payment configuration error',
+        message: 'Payment service is not properly configured'
+      });
+    }
+
     const { plan_id, amount } = req.body;
     
     // Validate input
@@ -18,14 +42,15 @@ export default async function handler(req, res) {
     // Get user from auth token
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized - No token provided' });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
+      console.error('Auth error:', authError);
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
     // Verify plan exists and is active
@@ -47,8 +72,7 @@ export default async function handler(req, res) {
       .eq('user_id', user.id)
       .eq('plan_id', plan_id)
       .eq('status', 'active')
-      .gte('expires_at', new Date().toISOString())
-      .single();
+      .maybeSingle();
 
     if (existingSubscription) {
       return res.status(400).json({ 
@@ -56,17 +80,32 @@ export default async function handler(req, res) {
       });
     }
 
-    // Create Razorpay order
+    // Initialize Razorpay with validation
     const Razorpay = require('razorpay');
+    
+    // Trim and validate keys
+    const key_id = process.env.RAZORPAY_KEY_ID.trim();
+    const key_secret = process.env.RAZORPAY_KEY_SECRET.trim();
+    
+    if (!key_id.startsWith('rzp_')) {
+      console.error('Invalid Razorpay key format:', key_id.substring(0, 10));
+      return res.status(500).json({ 
+        error: 'Invalid payment configuration' 
+      });
+    }
+
+    console.log('Initializing Razorpay with key:', key_id.substring(0, 12) + '...');
+    
     const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
+      key_id: key_id,
+      key_secret: key_secret,
     });
 
+    // Create Razorpay order
     const orderOptions = {
-      amount: amount, // amount in paise
+      amount: parseInt(amount), // Ensure it's a number
       currency: 'INR',
-      receipt: `receipt_${Date.now()}_${user.id.slice(0, 8)}`,
+      receipt: `receipt_${Date.now()}_${user.id.substring(0, 8)}`,
       notes: {
         plan_id: plan_id,
         user_id: user.id,
@@ -74,7 +113,14 @@ export default async function handler(req, res) {
       }
     };
 
+    console.log('Creating Razorpay order with options:', {
+      ...orderOptions,
+      amount: orderOptions.amount
+    });
+
     const razorpayOrder = await razorpay.orders.create(orderOptions);
+
+    console.log('Razorpay order created:', razorpayOrder.id);
 
     // Create payment record in database
     const { data: payment, error: paymentError } = await supabase
@@ -89,41 +135,69 @@ export default async function handler(req, res) {
         provider: 'razorpay',
         provider_order_id: razorpayOrder.id,
         idempotency_key: `order_${razorpayOrder.id}`,
-        net_amount_in_paise: amount
+        net_amount_in_paise: amount,
+        metadata: {
+          plan_name: plan.name,
+          billing_interval: plan.billing_interval,
+          user_email: user.email
+        }
       })
       .select()
       .single();
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError);
-      return res.status(500).json({ error: 'Failed to create payment record' });
+      // Don't fail the whole process if DB save fails
+      console.warn('Payment created in Razorpay but failed to save in DB');
     }
 
     // Log payment event
-    await supabase
-      .from('payment_events')
-      .insert({
-        payment_id: payment.id,
-        event_type: 'order_created',
-        payload: {
-          razorpay_order_id: razorpayOrder.id,
-          amount: amount,
-          currency: 'INR'
-        }
-      });
+    if (payment) {
+      await supabase
+        .from('payment_events')
+        .insert({
+          payment_id: payment.id,
+          event_type: 'order_created',
+          payload: {
+            razorpay_order_id: razorpayOrder.id,
+            amount: amount,
+            currency: 'INR'
+          }
+        });
+    }
 
     res.status(200).json({
+      success: true,
       orderId: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
-      payment_id: payment.id
+      payment_id: payment?.id || null
     });
 
   } catch (error) {
     console.error('Error creating order:', error);
+    
+    // More detailed error logging
+    if (error.error) {
+      console.error('Razorpay API Error:', {
+        code: error.error.code,
+        description: error.error.description,
+        field: error.error.field,
+        source: error.error.source,
+        step: error.error.step,
+        reason: error.error.reason,
+        metadata: error.error.metadata
+      });
+    }
+    
     res.status(500).json({ 
-      error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      success: false,
+      error: 'Failed to create payment order',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        stack: error.stack,
+        fullError: error
+      } : undefined
     });
   }
 }
